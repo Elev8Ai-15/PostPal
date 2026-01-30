@@ -48,7 +48,7 @@ export const posts = mysqlTable("posts", {
   title: varchar("title", { length: 255 }).notNull(),
   content: text("content").notNull(),
   contentType: mysqlEnum("contentType", ["social", "blog", "newsletter", "video"]).notNull(),
-  platform: mysqlEnum("platform", ["instagram", "twitter", "linkedin", "facebook", "youtube", "reddit", "email", "blog"]),
+  platform: mysqlEnum("platform", ["instagram", "twitter", "linkedin", "facebook", "youtube", "tiktok", "reddit", "email", "blog"]),
   status: mysqlEnum("status", ["draft", "pending", "approved", "scheduled", "published", "rejected"]).default("draft").notNull(),
   scheduledAt: timestamp("scheduledAt"),
   publishedAt: timestamp("publishedAt"),
@@ -81,7 +81,7 @@ export const postTemplates = mysqlTable("post_templates", {
   title: varchar("title", { length: 255 }).notNull(),
   content: text("content").notNull(),
   contentType: mysqlEnum("contentType", ["social", "blog", "newsletter", "video"]).notNull(),
-  platform: mysqlEnum("platform", ["instagram", "twitter", "linkedin", "facebook", "youtube", "reddit", "email", "blog"]),
+  platform: mysqlEnum("platform", ["instagram", "twitter", "linkedin", "facebook", "youtube", "tiktok", "reddit", "email", "blog"]),
   // Recurrence settings
   recurrenceType: mysqlEnum("recurrenceType", ["daily", "weekly", "biweekly", "monthly"]).notNull(),
   recurrenceDays: varchar("recurrenceDays", { length: 50 }), // e.g., "1,3,5" for Mon, Wed, Fri
@@ -222,3 +222,50 @@ export const autoResponders = mysqlTable("auto_responders", {
 
 export type AutoResponder = typeof autoResponders.$inferSelect;
 export type InsertAutoResponder = typeof autoResponders.$inferInsert;
+
+/**
+ * Campaigns - Group posts across multiple platforms
+ */
+export const campaigns = mysqlTable("campaigns", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  status: mysqlEnum("status", ["draft", "active", "completed", "paused"]).default("draft").notNull(),
+  startDate: timestamp("startDate"),
+  endDate: timestamp("endDate"),
+  // Aggregate metrics
+  totalImpressions: int("totalImpressions").default(0),
+  totalEngagement: int("totalEngagement").default(0),
+  totalClicks: int("totalClicks").default(0),
+  bestPlatform: varchar("bestPlatform", { length: 50 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Campaign = typeof campaigns.$inferSelect;
+export type InsertCampaign = typeof campaigns.$inferInsert;
+
+/**
+ * Campaign Posts - Link posts to campaigns with platform-specific metrics
+ */
+export const campaignPosts = mysqlTable("campaign_posts", {
+  id: int("id").autoincrement().primaryKey(),
+  campaignId: int("campaignId").notNull(),
+  postId: int("postId").notNull(),
+  platform: mysqlEnum("platform", ["instagram", "twitter", "linkedin", "facebook", "youtube", "tiktok", "reddit"]).notNull(),
+  // Platform-specific metrics
+  impressions: int("impressions").default(0),
+  engagement: int("engagement").default(0),
+  clicks: int("clicks").default(0),
+  likes: int("likes").default(0),
+  comments: int("comments").default(0),
+  shares: int("shares").default(0),
+  // Performance score (0-100)
+  performanceScore: int("performanceScore").default(0),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type CampaignPost = typeof campaignPosts.$inferSelect;
+export type InsertCampaignPost = typeof campaignPosts.$inferInsert;

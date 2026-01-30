@@ -131,3 +131,26 @@
 - [x] Generate campaign concept with platform-specific formatting
 - [x] Post to all selected platforms simultaneously
 - [x] Validate multi-platform posting functionality
+
+## New Features (v2.3)
+- [x] Add TikTok platform support
+  - [x] Add TikTok to platform options with 2200 character limit
+  - [x] Video-first content recommendations for TikTok
+  - [x] TikTok-specific formatting and hashtag strategy
+- [x] Implement campaign analytics
+  - [x] Create unified campaign view across all platforms
+  - [x] Track performance metrics per platform per campaign
+  - [x] Show which platform performs best for each campaign
+  - [x] Add campaign comparison charts
+- [x] Add Reddit subreddit targeting
+  - [x] Let users specify target subreddits
+  - [x] AI recommendations for matching subreddits
+  - [x] Subreddit-specific content optimization
+
+## Stabilization (v2.3)
+- [x] Run comprehensive debug scan
+- [x] Run calibration checks
+- [x] Run stabilization tests
+- [x] Clean up broken/unused code
+- [x] Remove unused components (hello-wave, parallax-scroll-view, external-link)
+- [x] Optimize performance

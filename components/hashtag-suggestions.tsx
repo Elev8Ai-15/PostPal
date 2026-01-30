@@ -4,7 +4,7 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
 import { trpc } from "@/lib/trpc";
 
-type Platform = "instagram" | "twitter" | "linkedin" | "facebook" | "youtube" | "reddit";
+type Platform = "instagram" | "twitter" | "linkedin" | "facebook" | "youtube" | "tiktok" | "reddit";
 
 interface HashtagSuggestionsProps {
   topic?: string;

@@ -555,3 +555,143 @@ export async function incrementAutoResponderUseCount(id: number) {
       .where(eq(autoResponders.id, id));
   }
 }
+
+// ============ CAMPAIGNS ============
+
+import {
+  campaigns,
+  campaignPosts,
+  InsertCampaign,
+  InsertCampaignPost,
+} from "../drizzle/schema";
+
+export async function getUserCampaigns(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(campaigns).where(eq(campaigns.userId, userId)).orderBy(desc(campaigns.createdAt));
+}
+
+export async function getCampaignById(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(campaigns).where(and(eq(campaigns.id, id), eq(campaigns.userId, userId)));
+  return result[0] || null;
+}
+
+export async function createCampaign(data: InsertCampaign) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(campaigns).values(data);
+  return result[0].insertId;
+}
+
+export async function updateCampaign(id: number, userId: number, data: Partial<InsertCampaign>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(campaigns).set(data).where(and(eq(campaigns.id, id), eq(campaigns.userId, userId)));
+}
+
+export async function deleteCampaign(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  // Delete campaign posts first
+  await db.delete(campaignPosts).where(eq(campaignPosts.campaignId, id));
+  // Then delete campaign
+  await db.delete(campaigns).where(and(eq(campaigns.id, id), eq(campaigns.userId, userId)));
+}
+
+// ============ CAMPAIGN POSTS ============
+
+export async function getCampaignPosts(campaignId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(campaignPosts).where(eq(campaignPosts.campaignId, campaignId));
+}
+
+export async function addPostToCampaign(data: InsertCampaignPost) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(campaignPosts).values(data);
+  return result[0].insertId;
+}
+
+export async function updateCampaignPostMetrics(id: number, data: Partial<InsertCampaignPost>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(campaignPosts).set(data).where(eq(campaignPosts.id, id));
+}
+
+export async function removePostFromCampaign(campaignPostId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(campaignPosts).where(eq(campaignPosts.id, campaignPostId));
+}
+
+// ============ CAMPAIGN ANALYTICS ============
+
+export async function getCampaignAnalytics(campaignId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const campaignPostsData = await db.select().from(campaignPosts).where(eq(campaignPosts.campaignId, campaignId));
+  
+  if (campaignPostsData.length === 0) {
+    return {
+      totalImpressions: 0,
+      totalEngagement: 0,
+      totalClicks: 0,
+      platformBreakdown: [],
+      bestPlatform: null,
+    };
+  }
+  
+  // Calculate totals
+  const totals = campaignPostsData.reduce((acc, post) => ({
+    impressions: acc.impressions + (post.impressions || 0),
+    engagement: acc.engagement + (post.engagement || 0),
+    clicks: acc.clicks + (post.clicks || 0),
+  }), { impressions: 0, engagement: 0, clicks: 0 });
+  
+  // Group by platform
+  const platformMap = new Map<string, { impressions: number; engagement: number; clicks: number; count: number }>();
+  campaignPostsData.forEach(post => {
+    const existing = platformMap.get(post.platform) || { impressions: 0, engagement: 0, clicks: 0, count: 0 };
+    platformMap.set(post.platform, {
+      impressions: existing.impressions + (post.impressions || 0),
+      engagement: existing.engagement + (post.engagement || 0),
+      clicks: existing.clicks + (post.clicks || 0),
+      count: existing.count + 1,
+    });
+  });
+  
+  const platformBreakdown = Array.from(platformMap.entries()).map(([platform, data]) => ({
+    platform,
+    ...data,
+    engagementRate: data.impressions > 0 ? (data.engagement / data.impressions) * 100 : 0,
+  }));
+  
+  // Find best performing platform by engagement rate
+  const bestPlatform = platformBreakdown.reduce((best, current) => 
+    current.engagementRate > (best?.engagementRate || 0) ? current : best
+  , platformBreakdown[0]);
+  
+  return {
+    totalImpressions: totals.impressions,
+    totalEngagement: totals.engagement,
+    totalClicks: totals.clicks,
+    platformBreakdown,
+    bestPlatform: bestPlatform?.platform || null,
+  };
+}
+
+export async function updateCampaignAggregates(campaignId: number, userId: number) {
+  const analytics = await getCampaignAnalytics(campaignId);
+  if (!analytics) return;
+  
+  await updateCampaign(campaignId, userId, {
+    totalImpressions: analytics.totalImpressions,
+    totalEngagement: analytics.totalEngagement,
+    totalClicks: analytics.totalClicks,
+    bestPlatform: analytics.bestPlatform,
+  });
+}

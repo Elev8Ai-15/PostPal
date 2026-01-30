@@ -79,7 +79,7 @@ export const appRouter = router({
         title: z.string().min(1).max(255),
         content: z.string().min(1),
         contentType: z.enum(["social", "blog", "newsletter", "video"]),
-        platform: z.enum(["instagram", "twitter", "linkedin", "facebook", "youtube", "reddit", "email", "blog"]).optional(),
+        platform: z.enum(["instagram", "twitter", "linkedin", "facebook", "youtube", "tiktok", "reddit", "email", "blog"]).optional(),
         scheduledAt: z.date().optional(),
         imageUrl: z.string().optional(),
         aiGenerated: z.boolean().optional(),
@@ -191,7 +191,7 @@ export const appRouter = router({
         title: z.string().min(1).max(255),
         content: z.string().min(1),
         contentType: z.enum(["social", "blog", "newsletter", "video"]),
-        platform: z.enum(["instagram", "twitter", "linkedin", "facebook", "youtube", "reddit", "email", "blog"]).optional(),
+        platform: z.enum(["instagram", "twitter", "linkedin", "facebook", "youtube", "tiktok", "reddit", "email", "blog"]).optional(),
         recurrenceType: z.enum(["daily", "weekly", "biweekly", "monthly"]),
         recurrenceDays: z.string().optional(), // "1,3,5" for Mon, Wed, Fri
         recurrenceTime: z.string().optional(), // "09:00"
@@ -453,6 +453,113 @@ export const appRouter = router({
       }),
   }),
 
+  // Campaigns - Multi-platform campaign management
+  campaigns: router({
+    list: protectedProcedure.query(({ ctx }) => {
+      return db.getUserCampaigns(ctx.user.id);
+    }),
+
+    getById: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(({ ctx, input }) => {
+        return db.getCampaignById(input.id, ctx.user.id);
+      }),
+
+    create: protectedProcedure
+      .input(z.object({
+        name: z.string().min(1).max(255),
+        description: z.string().optional(),
+        startDate: z.date().optional(),
+        endDate: z.date().optional(),
+      }))
+      .mutation(({ ctx, input }) => {
+        return db.createCampaign({
+          userId: ctx.user.id,
+          name: input.name,
+          description: input.description,
+          startDate: input.startDate,
+          endDate: input.endDate,
+          status: "draft",
+        });
+      }),
+
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        name: z.string().optional(),
+        description: z.string().optional(),
+        status: z.enum(["draft", "active", "completed", "paused"]).optional(),
+        startDate: z.date().optional(),
+        endDate: z.date().optional(),
+      }))
+      .mutation(({ ctx, input }) => {
+        const { id, ...data } = input;
+        return db.updateCampaign(id, ctx.user.id, data);
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(({ ctx, input }) => {
+        return db.deleteCampaign(input.id, ctx.user.id);
+      }),
+
+    // Campaign posts management
+    getPosts: protectedProcedure
+      .input(z.object({ campaignId: z.number() }))
+      .query(({ input }) => {
+        return db.getCampaignPosts(input.campaignId);
+      }),
+
+    addPost: protectedProcedure
+      .input(z.object({
+        campaignId: z.number(),
+        postId: z.number(),
+        platform: z.enum(["instagram", "twitter", "linkedin", "facebook", "youtube", "tiktok", "reddit"]),
+      }))
+      .mutation(({ input }) => {
+        return db.addPostToCampaign({
+          campaignId: input.campaignId,
+          postId: input.postId,
+          platform: input.platform,
+        });
+      }),
+
+    removePost: protectedProcedure
+      .input(z.object({ campaignPostId: z.number() }))
+      .mutation(({ input }) => {
+        return db.removePostFromCampaign(input.campaignPostId);
+      }),
+
+    updatePostMetrics: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        impressions: z.number().optional(),
+        engagement: z.number().optional(),
+        clicks: z.number().optional(),
+        likes: z.number().optional(),
+        comments: z.number().optional(),
+        shares: z.number().optional(),
+        performanceScore: z.number().min(0).max(100).optional(),
+      }))
+      .mutation(({ input }) => {
+        const { id, ...data } = input;
+        return db.updateCampaignPostMetrics(id, data);
+      }),
+
+    // Campaign analytics
+    getAnalytics: protectedProcedure
+      .input(z.object({ campaignId: z.number() }))
+      .query(({ input }) => {
+        return db.getCampaignAnalytics(input.campaignId);
+      }),
+
+    refreshAggregates: protectedProcedure
+      .input(z.object({ campaignId: z.number() }))
+      .mutation(({ ctx, input }) => {
+        return db.updateCampaignAggregates(input.campaignId, ctx.user.id);
+      }),
+  }),
+
   // Dashboard
   dashboard: router({
     stats: protectedProcedure.query(({ ctx }) => {
@@ -648,7 +755,7 @@ Keep the reply concise but helpful. Return JSON: { "reply": "your suggested repl
     generateContent: protectedProcedure
       .input(z.object({
         contentType: z.enum(["social", "blog", "newsletter", "video"]),
-        platform: z.enum(["instagram", "twitter", "linkedin", "facebook", "youtube", "reddit", "email", "blog"]).optional(),
+        platform: z.enum(["instagram", "twitter", "linkedin", "facebook", "youtube", "tiktok", "reddit", "email", "blog"]).optional(),
         topic: z.string().min(1),
         tone: z.enum(["professional", "casual", "friendly", "authoritative", "humorous"]).optional(),
         keywords: z.array(z.string()).optional(),
@@ -660,6 +767,7 @@ Keep the reply concise but helpful. Return JSON: { "reply": "your suggested repl
           linkedin: "Create professional LinkedIn content. Focus on industry insights and professional value.",
           facebook: "Create engaging Facebook content that encourages interaction and sharing.",
           youtube: "Create a video script with intro, main content, and call-to-action.",
+          tiktok: "Create TikTok video script content. Focus on hooks, trending sounds, and Gen-Z friendly language. Keep it short, punchy, and video-first. Use 3-5 trending hashtags.",
           reddit: "Create authentic Reddit content. Be genuine and community-focused. Avoid promotional language. Do not use hashtags - Reddit doesn't use them.",
           email: "Create an email newsletter with a compelling subject line and engaging body content.",
           blog: "Create a well-structured blog post with introduction, main points, and conclusion.",
@@ -732,7 +840,7 @@ Return your response as JSON:
     suggestHashtags: protectedProcedure
       .input(z.object({
         content: z.string().min(1),
-        platform: z.enum(["instagram", "twitter", "linkedin", "facebook", "youtube", "reddit"]).optional(),
+        platform: z.enum(["instagram", "twitter", "linkedin", "facebook", "youtube", "tiktok", "reddit"]).optional(),
         count: z.number().min(1).max(30).optional(),
       }))
       .mutation(async ({ input }) => {
@@ -742,6 +850,7 @@ Return your response as JSON:
           linkedin: "LinkedIn hashtags should be professional and industry-specific. Use 3-5 hashtags.",
           facebook: "Facebook hashtags should be minimal and highly relevant. Use 1-3 hashtags.",
           youtube: "YouTube tags should be searchable keywords and phrases. Include variations.",
+          tiktok: "TikTok hashtags should be trending and discoverable. Use 3-5 hashtags including trending challenges.",
           reddit: "Reddit does not use hashtags. Focus on relevant keywords for post titles and subreddit selection instead.",
         };
 
@@ -763,6 +872,52 @@ Return your response as JSON:
             {
               role: "user",
               content: `Suggest ${input.count || 10} hashtags for this content:\n${input.content}`
+            },
+          ],
+          response_format: { type: "json_object" },
+        });
+
+        const resultContent = response.choices[0].message.content;
+        return JSON.parse(typeof resultContent === 'string' ? resultContent : "{}");
+      }),
+
+    suggestSubreddits: protectedProcedure
+      .input(z.object({
+        topic: z.string().min(1),
+        content: z.string().optional(),
+        targetAudience: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const response = await invokeLLM({
+          messages: [
+            {
+              role: "system",
+              content: `You are a Reddit expert who knows all the popular and niche subreddits. Based on the topic and content provided, suggest relevant subreddits where this content would be well-received.
+
+Consider:
+- Subreddit rules and culture
+- Audience alignment
+- Content type appropriateness
+- Subreddit activity level
+- Avoid overly promotional subreddits
+
+Return your response as JSON:
+{
+  "subreddits": [
+    {
+      "name": "subredditname",
+      "subscribers": "estimated subscriber count",
+      "relevance": "high/medium/low",
+      "reason": "Why this subreddit is a good fit",
+      "tips": "Specific posting tips for this subreddit"
+    }
+  ],
+  "generalTips": "General Reddit posting advice for this content"
+}`
+            },
+            {
+              role: "user",
+              content: `Topic: ${input.topic}\n${input.content ? `Content: ${input.content}` : ""}\n${input.targetAudience ? `Target Audience: ${input.targetAudience}` : ""}`
             },
           ],
           response_format: { type: "json_object" },

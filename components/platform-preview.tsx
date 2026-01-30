@@ -4,7 +4,7 @@ import { useState } from "react";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
 
-type Platform = "instagram" | "twitter" | "linkedin" | "facebook" | "youtube" | "reddit";
+type Platform = "instagram" | "twitter" | "linkedin" | "facebook" | "youtube" | "tiktok" | "reddit";
 
 interface PlatformPreviewProps {
   content: string;
@@ -62,6 +62,14 @@ const platformConfig: Record<Platform, {
     hashtagLimit: 15,
     aspectRatio: "16:9",
   },
+  tiktok: {
+    name: "TikTok",
+    icon: "video",
+    color: "#000000",
+    charLimit: 2200,
+    hashtagLimit: 5,
+    aspectRatio: "9:16",
+  },
   reddit: {
     name: "Reddit",
     icon: "message",
@@ -72,7 +80,7 @@ const platformConfig: Record<Platform, {
   },
 };
 
-const platforms: Platform[] = ["instagram", "twitter", "linkedin", "facebook", "youtube", "reddit"];
+const platforms: Platform[] = ["instagram", "twitter", "linkedin", "facebook", "youtube", "tiktok", "reddit"];
 
 export function PlatformPreview({
   content,

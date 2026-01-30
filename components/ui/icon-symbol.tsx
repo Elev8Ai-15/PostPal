@@ -68,6 +68,11 @@ const MAPPING: Record<string, MaterialIconName> = {
   "number": "tag",
   "flame.fill": "local-fire-department",
   "target": "gps-fixed",
+  // Campaign and analytics icons
+  "chart.bar": "bar-chart",
+  "chevron.up": "expand-less",
+  "chevron.down": "expand-more",
+  "eye.slash": "visibility-off",
 };
 
 type IconSymbolName = keyof typeof MAPPING;

@@ -8,11 +8,12 @@ import { useAuth } from "@/hooks/use-auth";
 import { trpc } from "@/lib/trpc";
 import { HashtagSuggestions } from "@/components/hashtag-suggestions";
 import { PlatformPreview } from "@/components/platform-preview";
+import { SubredditSuggestions } from "@/components/subreddit-suggestions";
 import * as Haptics from "expo-haptics";
 import { Platform } from "react-native";
 
 type ContentType = "social" | "blog" | "newsletter" | "video";
-type SocialPlatform = "instagram" | "twitter" | "linkedin" | "facebook" | "youtube" | "reddit" | "email" | "blog";
+type SocialPlatform = "instagram" | "twitter" | "linkedin" | "facebook" | "youtube" | "tiktok" | "reddit" | "email" | "blog";
 type Tone = "professional" | "casual" | "friendly" | "authoritative" | "humorous";
 
 interface ContentTypeOption {
@@ -47,6 +48,7 @@ const PLATFORMS: PlatformOption[] = [
   { id: "linkedin", name: "LinkedIn", icon: "person.fill", charLimit: 3000, hashtagLimit: 5 },
   { id: "facebook", name: "Facebook", icon: "person.fill", charLimit: 63206, hashtagLimit: 10 },
   { id: "youtube", name: "YouTube", icon: "video", charLimit: 5000, hashtagLimit: 15 },
+  { id: "tiktok", name: "TikTok", icon: "video", charLimit: 2200, hashtagLimit: 5 },
   { id: "reddit", name: "Reddit", icon: "message", charLimit: 40000, hashtagLimit: 0 },
   { id: "email", name: "Email", icon: "envelope" },
   { id: "blog", name: "Blog", icon: "doc.text" },
@@ -67,6 +69,7 @@ const PLATFORM_FORMATTING: Record<string, { prefix?: string; suffix?: string; st
   linkedin: { style: "Professional, thought-leadership focused, no excessive emojis" },
   facebook: { style: "Conversational, community-focused, can be longer" },
   youtube: { style: "SEO-optimized description with timestamps" },
+  tiktok: { style: "Video-first, trending sounds/hooks, Gen-Z friendly, use trending hashtags" },
   reddit: { style: "Authentic, community-first, no promotional language, subreddit-aware" },
 };
 
@@ -81,6 +84,10 @@ export default function CreateContentScreen() {
   const [topic, setTopic] = useState("");
   const [keywords, setKeywords] = useState("");
   const [selectedHashtags, setSelectedHashtags] = useState<string[]>([]);
+  // Reddit subreddit targeting
+  const [targetSubreddits, setTargetSubreddits] = useState<string[]>([]);
+  const [subredditInput, setSubredditInput] = useState("");
+  const [suggestedSubreddits, setSuggestedSubreddits] = useState<string[]>([]);
   const [showPreview, setShowPreview] = useState(false);
   const [previewPlatform, setPreviewPlatform] = useState<SocialPlatform>("instagram");
   const [generatedContent, setGeneratedContent] = useState<{
@@ -648,12 +655,29 @@ export default function CreateContentScreen() {
               </View>
 
               {/* Hashtag Suggestions */}
-              {previewPlatform !== "reddit" && ["instagram", "twitter", "linkedin", "facebook", "youtube"].includes(previewPlatform) && (
+              {previewPlatform !== "reddit" && ["instagram", "twitter", "linkedin", "facebook", "youtube", "tiktok"].includes(previewPlatform) && (
                 <HashtagSuggestions
                   topic={topic}
-                  platform={previewPlatform as "instagram" | "twitter" | "linkedin" | "facebook" | "youtube"}
+                  platform={previewPlatform as "instagram" | "twitter" | "linkedin" | "facebook" | "youtube" | "tiktok"}
                   selectedHashtags={getHashtagsForPlatform(previewPlatform)}
                   onToggleHashtag={handleHashtagToggle}
+                />
+              )}
+
+              {/* Reddit Subreddit Targeting */}
+              {selectedPlatforms.includes("reddit") && (
+                <SubredditSuggestions
+                  topic={topic}
+                  content={generatedContent?.content}
+                  selectedSubreddits={targetSubreddits}
+                  onToggleSubreddit={(subreddit) => {
+                    setTargetSubreddits(prev =>
+                      prev.includes(subreddit)
+                        ? prev.filter(s => s !== subreddit)
+                        : [...prev, subreddit]
+                    );
+                  }}
+                  onSubredditInput={setSubredditInput}
                 />
               )}
 
