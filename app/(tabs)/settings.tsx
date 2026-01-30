@@ -1,6 +1,8 @@
 import { ScrollView, Text, View, TouchableOpacity, StyleSheet, Switch, Alert } from "react-native";
 import { useState } from "react";
+import { useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
+import { useAuth } from "@/hooks/use-auth";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
 import * as Haptics from "expo-haptics";
@@ -64,6 +66,8 @@ function Divider() {
 
 export default function SettingsScreen() {
   const colors = useColors();
+  const router = useRouter();
+  const { user, isAuthenticated, logout } = useAuth();
   const [pushNotifications, setPushNotifications] = useState(true);
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [autoApprove, setAutoApprove] = useState(false);
@@ -92,7 +96,10 @@ export default function SettingsScreen() {
       "Are you sure you want to sign out?",
       [
         { text: "Cancel", style: "cancel" },
-        { text: "Sign Out", style: "destructive", onPress: () => {} },
+        { text: "Sign Out", style: "destructive", onPress: async () => {
+          await logout();
+          router.replace("/login");
+        }},
       ]
     );
   };
@@ -118,11 +125,17 @@ export default function SettingsScreen() {
             activeOpacity={0.7}
           >
             <View className="w-16 h-16 rounded-full bg-primary items-center justify-center mr-4">
-              <Text className="text-2xl font-bold text-background">B</Text>
+              <Text className="text-2xl font-bold text-background">
+                {user?.name?.charAt(0) || "U"}
+              </Text>
             </View>
             <View className="flex-1">
-              <Text className="text-lg font-semibold text-foreground">Brad</Text>
-              <Text className="text-sm text-muted">AI Consultant</Text>
+              <Text className="text-lg font-semibold text-foreground">
+                {user?.name || "Guest User"}
+              </Text>
+              <Text className="text-sm text-muted">
+                {user?.email || "Not signed in"}
+              </Text>
               <Text className="text-sm text-primary mt-1">View Profile</Text>
             </View>
             <IconSymbol name="chevron.right" size={20} color={colors.muted} />
@@ -197,31 +210,10 @@ export default function SettingsScreen() {
         {/* Connected Accounts */}
         <SettingSection title="Connected Accounts">
           <SettingItem
-            icon="camera"
-            title="Instagram"
-            subtitle="Connected"
-            onPress={() => handlePress("Instagram")}
-          />
-          <Divider />
-          <SettingItem
-            icon="message"
-            title="Twitter / X"
-            subtitle="Connected"
-            onPress={() => handlePress("Twitter")}
-          />
-          <Divider />
-          <SettingItem
-            icon="person.fill"
-            title="LinkedIn"
-            subtitle="Not connected"
-            onPress={() => handlePress("LinkedIn")}
-          />
-          <Divider />
-          <SettingItem
-            icon="video"
-            title="YouTube"
-            subtitle="Not connected"
-            onPress={() => handlePress("YouTube")}
+            icon="share"
+            title="Manage Social Accounts"
+            subtitle="Connect Instagram, Twitter, LinkedIn, and more"
+            onPress={() => router.push("/social-accounts")}
           />
         </SettingSection>
 

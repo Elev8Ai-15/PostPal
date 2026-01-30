@@ -17,3 +17,9 @@
 - [x] Generate custom app logo
 - [x] Update app.config.ts with branding
 - [x] Copy logo to all required asset locations
+
+## New Features (v1.1)
+- [x] User authentication (login/signup flow)
+- [x] Social media API integration (Instagram, Twitter, LinkedIn)
+- [x] Content creation flow with AI assistance
+- [x] Comprehensive backend and frontend system check

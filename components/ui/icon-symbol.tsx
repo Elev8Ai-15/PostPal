@@ -45,6 +45,8 @@ const MAPPING: Record<string, MaterialIconName> = {
   // Social platform icons
   "camera": "camera-alt",
   "message": "chat",
+  // AI and special icons
+  "sparkles": "auto-awesome",
   // Misc
   "chevron.left.forwardslash.chevron.right": "code",
   "info.circle": "info",

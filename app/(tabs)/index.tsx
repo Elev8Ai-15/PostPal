@@ -165,6 +165,12 @@ export default function DashboardScreen() {
         <View className="mt-6 px-5">
           <Text className="text-lg font-semibold text-foreground mb-3">Quick Actions</Text>
           <QuickAction
+            icon="sparkles"
+            title="Create Content"
+            subtitle="Generate AI-powered posts"
+            onPress={() => router.push("/create-content")}
+          />
+          <QuickAction
             icon="checkmark.circle.fill"
             title="Review Content"
             subtitle="AI-generated posts ready for approval"
