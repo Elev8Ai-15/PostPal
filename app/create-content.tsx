@@ -12,7 +12,7 @@ import * as Haptics from "expo-haptics";
 import { Platform } from "react-native";
 
 type ContentType = "social" | "blog" | "newsletter" | "video";
-type SocialPlatform = "instagram" | "twitter" | "linkedin" | "facebook" | "youtube" | "email" | "blog";
+type SocialPlatform = "instagram" | "twitter" | "linkedin" | "facebook" | "youtube" | "reddit" | "email" | "blog";
 type Tone = "professional" | "casual" | "friendly" | "authoritative" | "humorous";
 
 interface ContentTypeOption {
@@ -25,6 +25,8 @@ interface PlatformOption {
   id: SocialPlatform;
   name: string;
   icon: string;
+  charLimit?: number;
+  hashtagLimit?: number;
 }
 
 interface ToneOption {
@@ -40,11 +42,12 @@ const CONTENT_TYPES: ContentTypeOption[] = [
 ];
 
 const PLATFORMS: PlatformOption[] = [
-  { id: "instagram", name: "Instagram", icon: "camera" },
-  { id: "twitter", name: "Twitter", icon: "message" },
-  { id: "linkedin", name: "LinkedIn", icon: "person.fill" },
-  { id: "facebook", name: "Facebook", icon: "person.fill" },
-  { id: "youtube", name: "YouTube", icon: "video" },
+  { id: "instagram", name: "Instagram", icon: "camera", charLimit: 2200, hashtagLimit: 30 },
+  { id: "twitter", name: "Twitter/X", icon: "message", charLimit: 280, hashtagLimit: 5 },
+  { id: "linkedin", name: "LinkedIn", icon: "person.fill", charLimit: 3000, hashtagLimit: 5 },
+  { id: "facebook", name: "Facebook", icon: "person.fill", charLimit: 63206, hashtagLimit: 10 },
+  { id: "youtube", name: "YouTube", icon: "video", charLimit: 5000, hashtagLimit: 15 },
+  { id: "reddit", name: "Reddit", icon: "message", charLimit: 40000, hashtagLimit: 0 },
   { id: "email", name: "Email", icon: "envelope" },
   { id: "blog", name: "Blog", icon: "doc.text" },
 ];
@@ -57,23 +60,35 @@ const TONES: ToneOption[] = [
   { id: "humorous", name: "Humorous" },
 ];
 
+// Platform-specific formatting rules
+const PLATFORM_FORMATTING: Record<string, { prefix?: string; suffix?: string; style: string }> = {
+  instagram: { style: "Visual-focused with emojis, line breaks for readability" },
+  twitter: { style: "Concise, punchy, thread-friendly if needed" },
+  linkedin: { style: "Professional, thought-leadership focused, no excessive emojis" },
+  facebook: { style: "Conversational, community-focused, can be longer" },
+  youtube: { style: "SEO-optimized description with timestamps" },
+  reddit: { style: "Authentic, community-first, no promotional language, subreddit-aware" },
+};
+
 export default function CreateContentScreen() {
   const colors = useColors();
   const router = useRouter();
   const { isAuthenticated } = useAuth();
   
   const [contentType, setContentType] = useState<ContentType>("social");
-  const [platform, setPlatform] = useState<SocialPlatform>("instagram");
+  const [selectedPlatforms, setSelectedPlatforms] = useState<SocialPlatform[]>(["instagram"]);
   const [tone, setTone] = useState<Tone>("professional");
   const [topic, setTopic] = useState("");
   const [keywords, setKeywords] = useState("");
   const [selectedHashtags, setSelectedHashtags] = useState<string[]>([]);
   const [showPreview, setShowPreview] = useState(false);
+  const [previewPlatform, setPreviewPlatform] = useState<SocialPlatform>("instagram");
   const [generatedContent, setGeneratedContent] = useState<{
     title: string;
     content: string;
     hashtags?: string[];
     callToAction?: string;
+    platformVersions?: Record<string, { content: string; hashtags: string[] }>;
   } | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -85,6 +100,41 @@ export default function CreateContentScreen() {
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
+  };
+
+  const handlePlatformToggle = (platformId: SocialPlatform) => {
+    triggerHaptic();
+    setSelectedPlatforms(prev => {
+      if (prev.includes(platformId)) {
+        // Don't allow deselecting if it's the only one
+        if (prev.length === 1) return prev;
+        return prev.filter(p => p !== platformId);
+      } else {
+        return [...prev, platformId];
+      }
+    });
+  };
+
+  const handleSelectAllPlatforms = () => {
+    triggerHaptic();
+    const availablePlatforms = getAvailablePlatforms();
+    if (selectedPlatforms.length === availablePlatforms.length) {
+      // If all selected, select only the first one
+      setSelectedPlatforms([availablePlatforms[0].id]);
+    } else {
+      // Select all
+      setSelectedPlatforms(availablePlatforms.map(p => p.id));
+    }
+  };
+
+  const getAvailablePlatforms = () => {
+    return PLATFORMS.filter(p => {
+      if (contentType === "social") return ["instagram", "twitter", "linkedin", "facebook", "reddit"].includes(p.id);
+      if (contentType === "video") return p.id === "youtube";
+      if (contentType === "newsletter") return p.id === "email";
+      if (contentType === "blog") return p.id === "blog";
+      return true;
+    });
   };
 
   const handleHashtagToggle = (hashtag: string) => {
@@ -99,6 +149,11 @@ export default function CreateContentScreen() {
   const handleGenerate = async () => {
     if (!topic.trim()) {
       Alert.alert("Topic Required", "Please enter a topic for your content.");
+      return;
+    }
+
+    if (selectedPlatforms.length === 0) {
+      Alert.alert("Platform Required", "Please select at least one platform.");
       return;
     }
 
@@ -120,19 +175,45 @@ export default function CreateContentScreen() {
     setSelectedHashtags([]);
 
     try {
-      const result = await generateMutation.mutateAsync({
-        contentType,
-        platform,
-        topic: topic.trim(),
-        tone,
-        keywords: keywords ? keywords.split(",").map(k => k.trim()).filter(Boolean) : undefined,
-      });
+      // Generate content for each selected platform
+      const platformVersions: Record<string, { content: string; hashtags: string[] }> = {};
+      
+      for (const platformId of selectedPlatforms) {
+        const platformInfo = PLATFORMS.find(p => p.id === platformId);
+        const formatting = PLATFORM_FORMATTING[platformId];
+        
+        const result = await generateMutation.mutateAsync({
+          contentType,
+          platform: platformId,
+          topic: topic.trim(),
+          tone,
+          keywords: keywords ? keywords.split(",").map(k => k.trim()).filter(Boolean) : undefined,
+        });
 
-      setGeneratedContent(result);
-      // Auto-select generated hashtags
-      if (result.hashtags) {
-        setSelectedHashtags(result.hashtags);
+        platformVersions[platformId] = {
+          content: result.content,
+          hashtags: result.hashtags || [],
+        };
       }
+
+      // Use the first platform's content as the main display
+      const firstPlatform = selectedPlatforms[0];
+      const firstResult = platformVersions[firstPlatform];
+      
+      setGeneratedContent({
+        title: `Campaign: ${topic.trim().substring(0, 50)}`,
+        content: firstResult.content,
+        hashtags: firstResult.hashtags,
+        platformVersions,
+      });
+      
+      // Auto-select generated hashtags from first platform
+      if (firstResult.hashtags) {
+        setSelectedHashtags(firstResult.hashtags);
+      }
+      
+      setPreviewPlatform(firstPlatform);
+      
       if (Platform.OS !== "web") {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
@@ -147,12 +228,28 @@ export default function CreateContentScreen() {
     }
   };
 
-  const getFullContent = () => {
-    if (!generatedContent) return "";
-    const hashtagString = selectedHashtags.length > 0 
-      ? `\n\n${selectedHashtags.map(h => `#${h}`).join(" ")}`
+  const getContentForPlatform = (platformId: SocialPlatform) => {
+    if (!generatedContent?.platformVersions) return generatedContent?.content || "";
+    return generatedContent.platformVersions[platformId]?.content || generatedContent.content;
+  };
+
+  const getHashtagsForPlatform = (platformId: SocialPlatform) => {
+    if (!generatedContent?.platformVersions) return selectedHashtags;
+    return generatedContent.platformVersions[platformId]?.hashtags || selectedHashtags;
+  };
+
+  const getFullContent = (platformId?: SocialPlatform) => {
+    const pid = platformId || selectedPlatforms[0];
+    const content = getContentForPlatform(pid);
+    const hashtags = getHashtagsForPlatform(pid);
+    
+    // Reddit doesn't use hashtags
+    if (pid === "reddit") return content;
+    
+    const hashtagString = hashtags.length > 0 
+      ? `\n\n${hashtags.map(h => `#${h}`).join(" ")}`
       : "";
-    return generatedContent.content + hashtagString;
+    return content + hashtagString;
   };
 
   const handleSaveAsDraft = async () => {
@@ -167,19 +264,63 @@ export default function CreateContentScreen() {
     setIsSaving(true);
 
     try {
-      await createPostMutation.mutateAsync({
-        title: generatedContent.title,
-        content: getFullContent(),
-        contentType,
-        platform,
-        aiGenerated: true,
-      });
+      // Save a post for each selected platform
+      for (const platformId of selectedPlatforms) {
+        await createPostMutation.mutateAsync({
+          title: generatedContent.title,
+          content: getFullContent(platformId),
+          contentType,
+          platform: platformId,
+          aiGenerated: true,
+        });
+      }
 
-      Alert.alert("Saved!", "Your content has been saved as a draft.", [
-        { text: "OK", onPress: () => router.back() },
-      ]);
+      const platformCount = selectedPlatforms.length;
+      Alert.alert(
+        "Saved!", 
+        `Your content has been saved as ${platformCount} draft${platformCount > 1 ? "s" : ""} (one for each platform).`, 
+        [{ text: "OK", onPress: () => router.back() }]
+      );
     } catch (error) {
       Alert.alert("Error", "Failed to save content. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handlePostToAllPlatforms = async () => {
+    if (!generatedContent) return;
+
+    if (!isAuthenticated) {
+      Alert.alert("Sign In Required", "Please sign in to post content.");
+      return;
+    }
+
+    triggerHaptic();
+    setIsSaving(true);
+
+    try {
+      // Create and schedule posts for all selected platforms
+      const results: string[] = [];
+      
+      for (const platformId of selectedPlatforms) {
+        await createPostMutation.mutateAsync({
+          title: generatedContent.title,
+          content: getFullContent(platformId),
+          contentType,
+          platform: platformId,
+          aiGenerated: true,
+        });
+        results.push(PLATFORMS.find(p => p.id === platformId)?.name || platformId);
+      }
+
+      Alert.alert(
+        "Campaign Created!", 
+        `Your content has been prepared for ${results.join(", ")}. Go to the Calendar to schedule posting times.`,
+        [{ text: "View Calendar", onPress: () => router.push("/(tabs)/calendar") }]
+      );
+    } catch (error) {
+      Alert.alert("Error", "Failed to create campaign. Please try again.");
     } finally {
       setIsSaving(false);
     }
@@ -197,17 +338,22 @@ export default function CreateContentScreen() {
     setIsSaving(true);
 
     try {
-      await createPostMutation.mutateAsync({
-        title: generatedContent.title,
-        content: getFullContent(),
-        contentType,
-        platform,
-        aiGenerated: true,
-      });
+      for (const platformId of selectedPlatforms) {
+        await createPostMutation.mutateAsync({
+          title: generatedContent.title,
+          content: getFullContent(platformId),
+          contentType,
+          platform: platformId,
+          aiGenerated: true,
+        });
+      }
 
-      Alert.alert("Sent!", "Your content has been sent for approval.", [
-        { text: "OK", onPress: () => router.back() },
-      ]);
+      const platformCount = selectedPlatforms.length;
+      Alert.alert(
+        "Sent!", 
+        `${platformCount} post${platformCount > 1 ? "s have" : " has"} been sent for approval.`, 
+        [{ text: "OK", onPress: () => router.back() }]
+      );
     } catch (error) {
       Alert.alert("Error", "Failed to send content. Please try again.");
     } finally {
@@ -215,8 +361,13 @@ export default function CreateContentScreen() {
     }
   };
 
-  // Check if platform supports preview
-  const supportsPreview = ["instagram", "twitter", "linkedin", "facebook", "youtube"].includes(platform);
+  const availablePlatforms = getAvailablePlatforms();
+  const allPlatformsSelected = selectedPlatforms.length === availablePlatforms.length;
+
+  // Check if any selected platform supports preview
+  const supportsPreview = selectedPlatforms.some(p => 
+    ["instagram", "twitter", "linkedin", "facebook", "youtube", "reddit"].includes(p)
+  );
 
   return (
     <ScreenContainer>
@@ -240,10 +391,10 @@ export default function CreateContentScreen() {
               >
                 <IconSymbol name="chevron.left" size={24} color={colors.foreground} />
               </TouchableOpacity>
-              <Text className="text-2xl font-bold text-foreground">Create Content</Text>
+              <Text className="text-2xl font-bold text-foreground">Create Campaign</Text>
             </View>
             <Text className="text-sm text-muted mt-1 ml-8">
-              Let AI help you create engaging content
+              Generate content for multiple platforms at once
             </Text>
           </View>
 
@@ -263,6 +414,15 @@ export default function CreateContentScreen() {
                     onPress={() => {
                       triggerHaptic();
                       setContentType(type.id);
+                      // Reset platform selection when content type changes
+                      const newAvailable = PLATFORMS.filter(p => {
+                        if (type.id === "social") return ["instagram", "twitter", "linkedin", "facebook", "reddit"].includes(p.id);
+                        if (type.id === "video") return p.id === "youtube";
+                        if (type.id === "newsletter") return p.id === "email";
+                        if (type.id === "blog") return p.id === "blog";
+                        return true;
+                      });
+                      setSelectedPlatforms([newAvailable[0]?.id || "instagram"]);
                     }}
                     activeOpacity={0.7}
                   >
@@ -284,47 +444,62 @@ export default function CreateContentScreen() {
             </ScrollView>
           </View>
 
-          {/* Platform Selection */}
+          {/* Platform Selection - Multi-Select */}
           <View className="px-5 pt-4">
-            <Text className="text-sm font-semibold text-foreground mb-3">Platform</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View className="flex-row">
-                {PLATFORMS.filter(p => {
-                  if (contentType === "social") return ["instagram", "twitter", "linkedin", "facebook"].includes(p.id);
-                  if (contentType === "video") return p.id === "youtube";
-                  if (contentType === "newsletter") return p.id === "email";
-                  if (contentType === "blog") return p.id === "blog";
-                  return true;
-                }).map((p) => (
+            <View className="flex-row justify-between items-center mb-3">
+              <Text className="text-sm font-semibold text-foreground">
+                Platforms ({selectedPlatforms.length} selected)
+              </Text>
+              <TouchableOpacity
+                onPress={handleSelectAllPlatforms}
+                className="px-3 py-1 rounded-full bg-surface border border-border"
+                activeOpacity={0.7}
+              >
+                <Text className="text-xs font-medium text-primary">
+                  {allPlatformsSelected ? "Deselect All" : "Select All"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <View className="flex-row flex-wrap">
+              {availablePlatforms.map((p) => {
+                const isSelected = selectedPlatforms.includes(p.id);
+                return (
                   <TouchableOpacity
                     key={p.id}
-                    className={`mr-3 px-4 py-3 rounded-xl border ${
-                      platform === p.id 
+                    className={`mr-2 mb-2 px-4 py-3 rounded-xl border ${
+                      isSelected 
                         ? "bg-primary border-primary" 
                         : "bg-surface border-border"
                     }`}
-                    onPress={() => {
-                      triggerHaptic();
-                      setPlatform(p.id);
-                    }}
+                    onPress={() => handlePlatformToggle(p.id)}
                     activeOpacity={0.7}
                   >
                     <View className="flex-row items-center">
                       <IconSymbol 
                         name={p.icon as any} 
                         size={18} 
-                        color={platform === p.id ? colors.background : colors.foreground} 
+                        color={isSelected ? colors.background : colors.foreground} 
                       />
                       <Text className={`ml-2 font-medium ${
-                        platform === p.id ? "text-background" : "text-foreground"
+                        isSelected ? "text-background" : "text-foreground"
                       }`}>
                         {p.name}
                       </Text>
+                      {isSelected && (
+                        <View className="ml-2 w-5 h-5 rounded-full bg-background/20 items-center justify-center">
+                          <IconSymbol name="checkmark" size={12} color={colors.background} />
+                        </View>
+                      )}
                     </View>
                   </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
+                );
+              })}
+            </View>
+            {selectedPlatforms.length > 1 && (
+              <Text className="text-xs text-muted mt-2">
+                Content will be optimized for each platform automatically
+              </Text>
+            )}
           </View>
 
           {/* Tone Selection */}
@@ -357,7 +532,7 @@ export default function CreateContentScreen() {
 
           {/* Topic Input */}
           <View className="px-5 pt-4">
-            <Text className="text-sm font-semibold text-foreground mb-3">Topic *</Text>
+            <Text className="text-sm font-semibold text-foreground mb-3">Campaign Topic *</Text>
             <TextInput
               className="bg-surface border border-border rounded-xl px-4 py-3 text-foreground"
               placeholder="What should the content be about?"
@@ -395,71 +570,97 @@ export default function CreateContentScreen() {
                 <>
                   <ActivityIndicator color={colors.background} />
                   <Text className="text-lg font-semibold text-background ml-2">
-                    Generating...
+                    Generating for {selectedPlatforms.length} platform{selectedPlatforms.length > 1 ? "s" : ""}...
                   </Text>
                 </>
               ) : (
                 <>
-                  <IconSymbol name="sparkles" size={20} color={colors.background} />
+                  <IconSymbol name="sparkles" size={22} color={colors.background} />
                   <Text className="text-lg font-semibold text-background ml-2">
-                    Generate with AI
+                    Generate Campaign
                   </Text>
                 </>
               )}
             </TouchableOpacity>
           </View>
 
-          {/* Generated Content Preview */}
+          {/* Generated Content */}
           {generatedContent && (
             <View className="px-5 pt-6">
-              <Text className="text-sm font-semibold text-foreground mb-3">Generated Content</Text>
-              <View className="bg-surface border border-border rounded-xl p-4">
+              <View className="bg-surface rounded-2xl p-4 border border-border">
                 <Text className="text-lg font-bold text-foreground mb-2">
                   {generatedContent.title}
                 </Text>
-                <Text className="text-base text-foreground leading-6 mb-4">
-                  {generatedContent.content}
+                
+                {/* Platform Tabs for Preview */}
+                {selectedPlatforms.length > 1 && (
+                  <View className="mb-4">
+                    <Text className="text-xs text-muted mb-2">Preview by platform:</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                      <View className="flex-row">
+                        {selectedPlatforms.map((pid) => {
+                          const platform = PLATFORMS.find(p => p.id === pid);
+                          return (
+                            <TouchableOpacity
+                              key={pid}
+                              className={`mr-2 px-3 py-1.5 rounded-full ${
+                                previewPlatform === pid ? "bg-primary" : "bg-background"
+                              }`}
+                              onPress={() => {
+                                triggerHaptic();
+                                setPreviewPlatform(pid);
+                              }}
+                            >
+                              <Text className={`text-xs font-medium ${
+                                previewPlatform === pid ? "text-background" : "text-foreground"
+                              }`}>
+                                {platform?.name}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </ScrollView>
+                  </View>
+                )}
+                
+                <Text className="text-sm text-foreground leading-relaxed">
+                  {getContentForPlatform(previewPlatform)}
                 </Text>
-                {selectedHashtags.length > 0 && (
-                  <View className="flex-row flex-wrap mb-4">
-                    {selectedHashtags.map((tag, index) => (
-                      <TouchableOpacity 
-                        key={index} 
-                        onPress={() => handleHashtagToggle(tag)}
-                        activeOpacity={0.7}
-                      >
-                        <Text className="text-primary mr-2 mb-1">
-                          #{tag}
-                        </Text>
-                      </TouchableOpacity>
+                
+                {/* Hashtags (not for Reddit) */}
+                {previewPlatform !== "reddit" && getHashtagsForPlatform(previewPlatform).length > 0 && (
+                  <View className="mt-3 flex-row flex-wrap">
+                    {getHashtagsForPlatform(previewPlatform).map((tag, index) => (
+                      <Text key={index} className="text-sm text-primary mr-2">
+                        #{tag}
+                      </Text>
                     ))}
                   </View>
                 )}
-                {generatedContent.callToAction && (
-                  <View className="bg-primary/10 rounded-lg p-3">
-                    <Text className="text-sm font-medium text-primary">
-                      CTA: {generatedContent.callToAction}
-                    </Text>
-                  </View>
-                )}
+
+                {/* Platform-specific note */}
+                <View className="mt-3 pt-3 border-t border-border">
+                  <Text className="text-xs text-muted">
+                    {PLATFORM_FORMATTING[previewPlatform]?.style || "Standard formatting"}
+                  </Text>
+                </View>
               </View>
 
               {/* Hashtag Suggestions */}
-              {contentType === "social" && (
-                <View className="mt-4">
-                  <HashtagSuggestions
-                    content={generatedContent.content}
-                    platform={platform as any}
-                    selectedHashtags={selectedHashtags}
-                    onHashtagToggle={handleHashtagToggle}
-                  />
-                </View>
+              {previewPlatform !== "reddit" && ["instagram", "twitter", "linkedin", "facebook", "youtube"].includes(previewPlatform) && (
+                <HashtagSuggestions
+                  topic={topic}
+                  platform={previewPlatform as "instagram" | "twitter" | "linkedin" | "facebook" | "youtube"}
+                  selectedHashtags={getHashtagsForPlatform(previewPlatform)}
+                  onToggleHashtag={handleHashtagToggle}
+                />
               )}
 
               {/* Platform Preview Toggle */}
               {supportsPreview && (
                 <TouchableOpacity
-                  className="mt-4 flex-row items-center justify-center py-3 bg-surface border border-border rounded-xl"
+                  className="mt-4 flex-row items-center justify-center py-3 bg-surface rounded-xl border border-border"
                   onPress={() => {
                     triggerHaptic();
                     setShowPreview(!showPreview);
@@ -467,60 +668,74 @@ export default function CreateContentScreen() {
                   activeOpacity={0.7}
                 >
                   <IconSymbol 
-                    name={showPreview ? "eye" : "eye"} 
+                    name={showPreview ? "eye.slash" : "eye"} 
                     size={18} 
                     color={colors.primary} 
                   />
                   <Text className="ml-2 font-medium text-primary">
-                    {showPreview ? "Hide Platform Preview" : "Show Platform Preview"}
+                    {showPreview ? "Hide Preview" : "Show Platform Preview"}
                   </Text>
                 </TouchableOpacity>
               )}
 
               {/* Platform Preview */}
               {showPreview && supportsPreview && (
-                <View className="mt-4">
-                  <PlatformPreview
-                    content={getFullContent()}
-                    hashtags={selectedHashtags}
-                    selectedPlatform={platform as any}
-                    onPlatformChange={(p) => setPlatform(p)}
-                  />
-                </View>
+                <PlatformPreview
+                  selectedPlatform={previewPlatform as "instagram" | "twitter" | "linkedin" | "facebook" | "youtube" | "reddit"}
+                  content={getContentForPlatform(previewPlatform)}
+                  hashtags={previewPlatform !== "reddit" ? getHashtagsForPlatform(previewPlatform) : []}
+                />
               )}
 
               {/* Action Buttons */}
-              <View className="flex-row mt-4">
+              <View className="mt-4 flex-row">
                 <TouchableOpacity
-                  className="flex-1 bg-surface border border-border rounded-xl py-3 items-center mr-2"
+                  className="flex-1 mr-2 py-3 rounded-xl border border-border items-center"
                   onPress={handleSaveAsDraft}
                   activeOpacity={0.7}
                   disabled={isSaving}
                 >
-                  {isSaving ? (
-                    <ActivityIndicator color={colors.foreground} size="small" />
-                  ) : (
-                    <Text className="font-semibold text-foreground">Save as Draft</Text>
-                  )}
+                  <Text className="font-medium text-foreground">Save as Draft</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  className="flex-1 bg-primary rounded-xl py-3 items-center ml-2"
-                  onPress={handleSendForApproval}
-                  activeOpacity={0.7}
+                  className="flex-1 ml-2 py-3 rounded-xl bg-primary items-center"
+                  onPress={handlePostToAllPlatforms}
+                  activeOpacity={0.8}
                   disabled={isSaving}
                 >
                   {isSaving ? (
                     <ActivityIndicator color={colors.background} size="small" />
                   ) : (
-                    <Text className="font-semibold text-background">Send for Approval</Text>
+                    <Text className="font-medium text-background">
+                      {selectedPlatforms.length > 1 ? "Create Campaign" : "Schedule Post"}
+                    </Text>
                   )}
                 </TouchableOpacity>
               </View>
+
+              {/* Send for Approval */}
+              <TouchableOpacity
+                className="mt-3 py-3 rounded-xl border border-primary items-center"
+                onPress={handleSendForApproval}
+                activeOpacity={0.7}
+                disabled={isSaving}
+              >
+                <Text className="font-medium text-primary">Send for Approval</Text>
+              </TouchableOpacity>
+
+              {/* Multi-platform summary */}
+              {selectedPlatforms.length > 1 && (
+                <View className="mt-4 p-3 bg-success/10 rounded-xl">
+                  <Text className="text-sm text-success font-medium text-center">
+                    This campaign will post to {selectedPlatforms.length} platforms with optimized formatting for each
+                  </Text>
+                </View>
+              )}
             </View>
           )}
 
           {/* Bottom Padding */}
-          <View className="h-8" />
+          <View style={{ height: 100 }} />
         </ScrollView>
       </KeyboardAvoidingView>
     </ScreenContainer>

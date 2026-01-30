@@ -4,23 +4,30 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
 import { trpc } from "@/lib/trpc";
 
-type Platform = "instagram" | "twitter" | "linkedin" | "facebook" | "youtube";
+type Platform = "instagram" | "twitter" | "linkedin" | "facebook" | "youtube" | "reddit";
 
 interface HashtagSuggestionsProps {
-  content: string;
+  topic?: string;
+  content?: string;
   platform?: Platform;
   selectedHashtags: string[];
-  onHashtagToggle: (hashtag: string) => void;
+  onToggleHashtag?: (hashtag: string) => void;
+  onHashtagToggle?: (hashtag: string) => void;
   onHashtagsGenerated?: (hashtags: string[]) => void;
 }
 
 export function HashtagSuggestions({
+  topic,
   content,
   platform,
   selectedHashtags,
+  onToggleHashtag,
   onHashtagToggle,
   onHashtagsGenerated,
 }: HashtagSuggestionsProps) {
+  // Support both prop names for backward compatibility
+  const handleHashtagToggle = onToggleHashtag || onHashtagToggle || (() => {});
+  const searchContent = topic || content || "";
   const colors = useColors();
   const [suggestions, setSuggestions] = useState<{
     hashtags: string[];
@@ -37,15 +44,16 @@ export function HashtagSuggestions({
   });
 
   const handleGenerateSuggestions = () => {
-    if (!content.trim()) return;
+    if (!hasContent) return;
     suggestMutation.mutate({
-      content,
+      content: searchContent,
       platform,
       count: platform === "instagram" ? 20 : 10,
     });
   };
 
   const isSelected = (hashtag: string) => selectedHashtags.includes(hashtag);
+  const hasContent = searchContent.trim().length > 0;
 
   const HashtagChip = ({ tag, category }: { tag: string; category?: "trending" | "niche" }) => {
     const selected = isSelected(tag);
@@ -57,7 +65,7 @@ export function HashtagSuggestions({
 
     return (
       <TouchableOpacity
-        onPress={() => onHashtagToggle(tag)}
+        onPress={() => handleHashtagToggle(tag)}
         style={[
           styles.chip,
           selected 
@@ -89,12 +97,12 @@ export function HashtagSuggestions({
         </View>
         <TouchableOpacity
           onPress={handleGenerateSuggestions}
-          disabled={suggestMutation.isPending || !content.trim()}
+          disabled={suggestMutation.isPending || !hasContent}
           style={[
             styles.generateButton,
             { 
               backgroundColor: suggestMutation.isPending ? colors.muted : colors.primary,
-              opacity: !content.trim() ? 0.5 : 1,
+              opacity: !hasContent ? 0.5 : 1,
             }
           ]}
           activeOpacity={0.7}
@@ -118,7 +126,7 @@ export function HashtagSuggestions({
           <Text style={[styles.selectedText, { color: colors.primary }]}>
             {selectedHashtags.length} hashtag{selectedHashtags.length !== 1 ? "s" : ""} selected
           </Text>
-          <TouchableOpacity onPress={() => selectedHashtags.forEach(h => onHashtagToggle(h))}>
+          <TouchableOpacity onPress={() => selectedHashtags.forEach(h => handleHashtagToggle(h))}>
             <Text style={[styles.clearText, { color: colors.primary }]}>Clear all</Text>
           </TouchableOpacity>
         </View>

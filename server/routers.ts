@@ -79,7 +79,7 @@ export const appRouter = router({
         title: z.string().min(1).max(255),
         content: z.string().min(1),
         contentType: z.enum(["social", "blog", "newsletter", "video"]),
-        platform: z.enum(["instagram", "twitter", "linkedin", "facebook", "youtube", "email", "blog"]).optional(),
+        platform: z.enum(["instagram", "twitter", "linkedin", "facebook", "youtube", "reddit", "email", "blog"]).optional(),
         scheduledAt: z.date().optional(),
         imageUrl: z.string().optional(),
         aiGenerated: z.boolean().optional(),
@@ -191,7 +191,7 @@ export const appRouter = router({
         title: z.string().min(1).max(255),
         content: z.string().min(1),
         contentType: z.enum(["social", "blog", "newsletter", "video"]),
-        platform: z.enum(["instagram", "twitter", "linkedin", "facebook", "youtube", "email", "blog"]).optional(),
+        platform: z.enum(["instagram", "twitter", "linkedin", "facebook", "youtube", "reddit", "email", "blog"]).optional(),
         recurrenceType: z.enum(["daily", "weekly", "biweekly", "monthly"]),
         recurrenceDays: z.string().optional(), // "1,3,5" for Mon, Wed, Fri
         recurrenceTime: z.string().optional(), // "09:00"
@@ -648,18 +648,19 @@ Keep the reply concise but helpful. Return JSON: { "reply": "your suggested repl
     generateContent: protectedProcedure
       .input(z.object({
         contentType: z.enum(["social", "blog", "newsletter", "video"]),
-        platform: z.enum(["instagram", "twitter", "linkedin", "facebook", "youtube", "email", "blog"]).optional(),
+        platform: z.enum(["instagram", "twitter", "linkedin", "facebook", "youtube", "reddit", "email", "blog"]).optional(),
         topic: z.string().min(1),
         tone: z.enum(["professional", "casual", "friendly", "authoritative", "humorous"]).optional(),
         keywords: z.array(z.string()).optional(),
       }))
       .mutation(async ({ input }) => {
-        const platformInstructions = {
+        const platformInstructions: Record<string, string> = {
           instagram: "Create engaging Instagram content with relevant hashtags. Keep it visual and concise.",
           twitter: "Create a Twitter/X post or thread. Keep tweets under 280 characters. Use relevant hashtags.",
           linkedin: "Create professional LinkedIn content. Focus on industry insights and professional value.",
           facebook: "Create engaging Facebook content that encourages interaction and sharing.",
           youtube: "Create a video script with intro, main content, and call-to-action.",
+          reddit: "Create authentic Reddit content. Be genuine and community-focused. Avoid promotional language. Do not use hashtags - Reddit doesn't use them.",
           email: "Create an email newsletter with a compelling subject line and engaging body content.",
           blog: "Create a well-structured blog post with introduction, main points, and conclusion.",
         };
@@ -731,16 +732,17 @@ Return your response as JSON:
     suggestHashtags: protectedProcedure
       .input(z.object({
         content: z.string().min(1),
-        platform: z.enum(["instagram", "twitter", "linkedin", "facebook", "youtube"]).optional(),
+        platform: z.enum(["instagram", "twitter", "linkedin", "facebook", "youtube", "reddit"]).optional(),
         count: z.number().min(1).max(30).optional(),
       }))
       .mutation(async ({ input }) => {
-        const platformContext = {
+        const platformContext: Record<string, string> = {
           instagram: "Instagram hashtags should be popular and discoverable. Include a mix of broad and niche tags. Maximum 30 hashtags.",
           twitter: "Twitter hashtags should be trending and concise. Use 2-5 hashtags max for best engagement.",
           linkedin: "LinkedIn hashtags should be professional and industry-specific. Use 3-5 hashtags.",
           facebook: "Facebook hashtags should be minimal and highly relevant. Use 1-3 hashtags.",
           youtube: "YouTube tags should be searchable keywords and phrases. Include variations.",
+          reddit: "Reddit does not use hashtags. Focus on relevant keywords for post titles and subreddit selection instead.",
         };
 
         const response = await invokeLLM({

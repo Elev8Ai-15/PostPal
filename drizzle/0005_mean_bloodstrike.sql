@@ -1,0 +1,2 @@
+ALTER TABLE `post_templates` MODIFY COLUMN `platform` enum('instagram','twitter','linkedin','facebook','youtube','reddit','email','blog');--> statement-breakpoint
+ALTER TABLE `posts` MODIFY COLUMN `platform` enum('instagram','twitter','linkedin','facebook','youtube','reddit','email','blog');

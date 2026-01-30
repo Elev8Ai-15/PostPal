@@ -48,7 +48,7 @@ export const posts = mysqlTable("posts", {
   title: varchar("title", { length: 255 }).notNull(),
   content: text("content").notNull(),
   contentType: mysqlEnum("contentType", ["social", "blog", "newsletter", "video"]).notNull(),
-  platform: mysqlEnum("platform", ["instagram", "twitter", "linkedin", "facebook", "youtube", "email", "blog"]),
+  platform: mysqlEnum("platform", ["instagram", "twitter", "linkedin", "facebook", "youtube", "reddit", "email", "blog"]),
   status: mysqlEnum("status", ["draft", "pending", "approved", "scheduled", "published", "rejected"]).default("draft").notNull(),
   scheduledAt: timestamp("scheduledAt"),
   publishedAt: timestamp("publishedAt"),
@@ -81,7 +81,7 @@ export const postTemplates = mysqlTable("post_templates", {
   title: varchar("title", { length: 255 }).notNull(),
   content: text("content").notNull(),
   contentType: mysqlEnum("contentType", ["social", "blog", "newsletter", "video"]).notNull(),
-  platform: mysqlEnum("platform", ["instagram", "twitter", "linkedin", "facebook", "youtube", "email", "blog"]),
+  platform: mysqlEnum("platform", ["instagram", "twitter", "linkedin", "facebook", "youtube", "reddit", "email", "blog"]),
   // Recurrence settings
   recurrenceType: mysqlEnum("recurrenceType", ["daily", "weekly", "biweekly", "monthly"]).notNull(),
   recurrenceDays: varchar("recurrenceDays", { length: 50 }), // e.g., "1,3,5" for Mon, Wed, Fri

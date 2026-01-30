@@ -4,7 +4,7 @@ import { useState } from "react";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
 
-type Platform = "instagram" | "twitter" | "linkedin" | "facebook" | "youtube";
+type Platform = "instagram" | "twitter" | "linkedin" | "facebook" | "youtube" | "reddit";
 
 interface PlatformPreviewProps {
   content: string;
@@ -62,9 +62,17 @@ const platformConfig: Record<Platform, {
     hashtagLimit: 15,
     aspectRatio: "16:9",
   },
+  reddit: {
+    name: "Reddit",
+    icon: "message",
+    color: "#FF4500",
+    charLimit: 40000,
+    hashtagLimit: 0,
+    aspectRatio: "16:9",
+  },
 };
 
-const platforms: Platform[] = ["instagram", "twitter", "linkedin", "facebook", "youtube"];
+const platforms: Platform[] = ["instagram", "twitter", "linkedin", "facebook", "youtube", "reddit"];
 
 export function PlatformPreview({
   content,
@@ -79,7 +87,7 @@ export function PlatformPreview({
   const config = platformConfig[selectedPlatform];
   const charCount = content.length;
   const isOverLimit = charCount > config.charLimit;
-  const isOverHashtagLimit = hashtags.length > config.hashtagLimit;
+  const isOverHashtagLimit = config.hashtagLimit > 0 && hashtags.length > config.hashtagLimit;
   
   const truncatedContent = isOverLimit 
     ? content.substring(0, config.charLimit - 3) + "..."
@@ -97,6 +105,7 @@ export function PlatformPreview({
       case "linkedin": return 1.91;
       case "facebook": return 1.91;
       case "youtube": return 16/9;
+      case "reddit": return 16/9;
       default: return 1;
     }
   };
@@ -147,7 +156,9 @@ export function PlatformPreview({
           </View>
           <View style={styles.headerInfo}>
             <Text style={[styles.username, { color: colors.foreground }]}>Brad</Text>
-            <Text style={[styles.handle, { color: colors.muted }]}>@bradmarketing</Text>
+            <Text style={[styles.handle, { color: colors.muted }]}>
+              {selectedPlatform === "reddit" ? "u/bradmarketing" : "@bradmarketing"}
+            </Text>
           </View>
           <IconSymbol name="ellipsis" size={20} color={colors.muted} />
         </View>
@@ -169,10 +180,10 @@ export function PlatformPreview({
             {truncatedContent}
           </Text>
           
-          {/* Hashtags */}
-          {hashtags.length > 0 && (
+          {/* Hashtags (not for Reddit) */}
+          {selectedPlatform !== "reddit" && hashtags.length > 0 && (
             <View style={styles.hashtagPreview}>
-              {hashtags.slice(0, config.hashtagLimit).map((tag, index) => (
+              {hashtags.slice(0, config.hashtagLimit || hashtags.length).map((tag, index) => (
                 <Text key={index} style={[styles.hashtagText, { color: config.color }]}>
                   #{tag}{" "}
                 </Text>
@@ -183,18 +194,37 @@ export function PlatformPreview({
 
         {/* Engagement simulation */}
         <View style={[styles.engagementBar, { borderTopColor: colors.border }]}>
-          <View style={styles.engagementItem}>
-            <IconSymbol name="heart" size={18} color={colors.muted} />
-            <Text style={[styles.engagementText, { color: colors.muted }]}>Like</Text>
-          </View>
-          <View style={styles.engagementItem}>
-            <IconSymbol name="bubble.left" size={18} color={colors.muted} />
-            <Text style={[styles.engagementText, { color: colors.muted }]}>Comment</Text>
-          </View>
-          <View style={styles.engagementItem}>
-            <IconSymbol name="arrow.2.squarepath" size={18} color={colors.muted} />
-            <Text style={[styles.engagementText, { color: colors.muted }]}>Share</Text>
-          </View>
+          {selectedPlatform === "reddit" ? (
+            <>
+              <View style={styles.engagementItem}>
+                <IconSymbol name="arrow.up" size={18} color={colors.muted} />
+                <Text style={[styles.engagementText, { color: colors.muted }]}>Upvote</Text>
+              </View>
+              <View style={styles.engagementItem}>
+                <IconSymbol name="bubble.left" size={18} color={colors.muted} />
+                <Text style={[styles.engagementText, { color: colors.muted }]}>Comment</Text>
+              </View>
+              <View style={styles.engagementItem}>
+                <IconSymbol name="arrow.2.squarepath" size={18} color={colors.muted} />
+                <Text style={[styles.engagementText, { color: colors.muted }]}>Share</Text>
+              </View>
+            </>
+          ) : (
+            <>
+              <View style={styles.engagementItem}>
+                <IconSymbol name="heart" size={18} color={colors.muted} />
+                <Text style={[styles.engagementText, { color: colors.muted }]}>Like</Text>
+              </View>
+              <View style={styles.engagementItem}>
+                <IconSymbol name="bubble.left" size={18} color={colors.muted} />
+                <Text style={[styles.engagementText, { color: colors.muted }]}>Comment</Text>
+              </View>
+              <View style={styles.engagementItem}>
+                <IconSymbol name="arrow.2.squarepath" size={18} color={colors.muted} />
+                <Text style={[styles.engagementText, { color: colors.muted }]}>Share</Text>
+              </View>
+            </>
+          )}
         </View>
       </View>
 
@@ -209,15 +239,17 @@ export function PlatformPreview({
             {charCount} / {config.charLimit}
           </Text>
         </View>
-        <View style={styles.statRow}>
-          <Text style={[styles.statLabel, { color: colors.muted }]}>Hashtags:</Text>
-          <Text style={[
-            styles.statValue,
-            { color: isOverHashtagLimit ? colors.error : colors.foreground }
-          ]}>
-            {hashtags.length} / {config.hashtagLimit}
-          </Text>
-        </View>
+        {config.hashtagLimit > 0 && (
+          <View style={styles.statRow}>
+            <Text style={[styles.statLabel, { color: colors.muted }]}>Hashtags:</Text>
+            <Text style={[
+              styles.statValue,
+              { color: isOverHashtagLimit ? colors.error : colors.foreground }
+            ]}>
+              {hashtags.length} / {config.hashtagLimit}
+            </Text>
+          </View>
+        )}
         <View style={styles.statRow}>
           <Text style={[styles.statLabel, { color: colors.muted }]}>Image ratio:</Text>
           <Text style={[styles.statValue, { color: colors.foreground }]}>
@@ -254,6 +286,7 @@ export function PlatformPreview({
           {selectedPlatform === "linkedin" && "Professional tone works best. Tag relevant people and companies."}
           {selectedPlatform === "facebook" && "Questions and polls drive engagement. Native video gets 10x more reach."}
           {selectedPlatform === "youtube" && "First 100 characters of description are most important for SEO."}
+          {selectedPlatform === "reddit" && "Be authentic and avoid promotional language. Engage with the community first. Choose the right subreddit."}
         </Text>
       </View>
     </View>
@@ -400,3 +433,5 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
 });
+
+export type { Platform as PreviewPlatform };
