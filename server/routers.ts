@@ -4,7 +4,42 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { invokeLLM } from "./_core/llm";
+import { notifyOwner } from "./_core/notification";
 import * as db from "./db";
+
+// Helper to calculate next scheduled date for recurring templates
+function calculateNextScheduledDate(
+  recurrenceType: "daily" | "weekly" | "biweekly" | "monthly",
+  recurrenceDays: string | null,
+  recurrenceTime: string | null,
+  fromDate: Date = new Date()
+): Date {
+  const [hours, minutes] = (recurrenceTime || "09:00").split(":").map(Number);
+  const next = new Date(fromDate);
+  next.setHours(hours, minutes, 0, 0);
+
+  switch (recurrenceType) {
+    case "daily":
+      next.setDate(next.getDate() + 1);
+      break;
+    case "weekly": {
+      const days = recurrenceDays?.split(",").map(Number) || [1]; // Default Monday
+      const currentDay = next.getDay();
+      const nextDay = days.find(d => d > currentDay) || days[0];
+      const daysToAdd = nextDay > currentDay ? nextDay - currentDay : 7 - currentDay + nextDay;
+      next.setDate(next.getDate() + daysToAdd);
+      break;
+    }
+    case "biweekly":
+      next.setDate(next.getDate() + 14);
+      break;
+    case "monthly":
+      next.setMonth(next.getMonth() + 1);
+      break;
+  }
+
+  return next;
+}
 
 export const appRouter = router({
   system: systemRouter,
@@ -47,6 +82,9 @@ export const appRouter = router({
         scheduledAt: z.date().optional(),
         imageUrl: z.string().optional(),
         aiGenerated: z.boolean().optional(),
+        reminderEnabled: z.boolean().optional(),
+        reminderMinutesBefore: z.number().optional(),
+        templateId: z.number().optional(),
       }))
       .mutation(({ ctx, input }) => {
         return db.createPost({
@@ -58,7 +96,10 @@ export const appRouter = router({
           scheduledAt: input.scheduledAt,
           imageUrl: input.imageUrl,
           aiGenerated: input.aiGenerated ?? false,
-          status: "draft",
+          reminderEnabled: input.reminderEnabled ?? true,
+          reminderMinutesBefore: input.reminderMinutesBefore ?? 30,
+          templateId: input.templateId,
+          status: input.scheduledAt ? "scheduled" : "draft",
         });
       }),
 
@@ -70,6 +111,8 @@ export const appRouter = router({
         status: z.enum(["draft", "pending", "approved", "scheduled", "published", "rejected"]).optional(),
         scheduledAt: z.date().optional(),
         imageUrl: z.string().optional(),
+        reminderEnabled: z.boolean().optional(),
+        reminderMinutesBefore: z.number().optional(),
       }))
       .mutation(({ ctx, input }) => {
         const { id, ...data } = input;
@@ -98,13 +141,199 @@ export const appRouter = router({
       .input(z.object({
         id: z.number(),
         scheduledAt: z.date(),
+        reminderEnabled: z.boolean().optional(),
+        reminderMinutesBefore: z.number().optional(),
       }))
       .mutation(({ ctx, input }) => {
         return db.updatePost(input.id, ctx.user.id, {
           scheduledAt: input.scheduledAt,
           status: "scheduled",
+          reminderEnabled: input.reminderEnabled ?? true,
+          reminderMinutesBefore: input.reminderMinutesBefore ?? 30,
+          reminderSent: false,
         });
       }),
+
+    // Reschedule via drag-and-drop
+    reschedule: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        scheduledAt: z.date(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await db.updatePost(input.id, ctx.user.id, {
+          scheduledAt: input.scheduledAt,
+          reminderSent: false, // Reset reminder for new time
+        });
+        return { success: true };
+      }),
+  }),
+
+  // Recurring Post Templates
+  templates: router({
+    list: protectedProcedure.query(({ ctx }) => {
+      return db.getUserTemplates(ctx.user.id);
+    }),
+
+    active: protectedProcedure.query(({ ctx }) => {
+      return db.getActiveTemplates(ctx.user.id);
+    }),
+
+    getById: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(({ ctx, input }) => {
+        return db.getTemplateById(input.id, ctx.user.id);
+      }),
+
+    create: protectedProcedure
+      .input(z.object({
+        title: z.string().min(1).max(255),
+        content: z.string().min(1),
+        contentType: z.enum(["social", "blog", "newsletter", "video"]),
+        platform: z.enum(["instagram", "twitter", "linkedin", "facebook", "youtube", "email", "blog"]).optional(),
+        recurrenceType: z.enum(["daily", "weekly", "biweekly", "monthly"]),
+        recurrenceDays: z.string().optional(), // "1,3,5" for Mon, Wed, Fri
+        recurrenceTime: z.string().optional(), // "09:00"
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const nextScheduledAt = calculateNextScheduledDate(
+          input.recurrenceType,
+          input.recurrenceDays || null,
+          input.recurrenceTime || null
+        );
+
+        return db.createTemplate({
+          userId: ctx.user.id,
+          title: input.title,
+          content: input.content,
+          contentType: input.contentType,
+          platform: input.platform,
+          recurrenceType: input.recurrenceType,
+          recurrenceDays: input.recurrenceDays,
+          recurrenceTime: input.recurrenceTime || "09:00",
+          isActive: true,
+          nextScheduledAt,
+        });
+      }),
+
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        title: z.string().min(1).max(255).optional(),
+        content: z.string().optional(),
+        recurrenceType: z.enum(["daily", "weekly", "biweekly", "monthly"]).optional(),
+        recurrenceDays: z.string().optional(),
+        recurrenceTime: z.string().optional(),
+        isActive: z.boolean().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { id, ...data } = input;
+        
+        // Recalculate next scheduled if recurrence changed
+        if (input.recurrenceType || input.recurrenceDays || input.recurrenceTime) {
+          const template = await db.getTemplateById(id, ctx.user.id);
+          if (template) {
+            const nextScheduledAt = calculateNextScheduledDate(
+              input.recurrenceType || template.recurrenceType,
+              input.recurrenceDays || template.recurrenceDays,
+              input.recurrenceTime || template.recurrenceTime
+            );
+            await db.updateTemplate(id, ctx.user.id, { ...data, nextScheduledAt });
+            return;
+          }
+        }
+        
+        return db.updateTemplate(id, ctx.user.id, data);
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(({ ctx, input }) => {
+        return db.deleteTemplate(input.id, ctx.user.id);
+      }),
+
+    // Generate post from template now
+    generatePost: protectedProcedure
+      .input(z.object({ 
+        templateId: z.number(),
+        scheduledAt: z.date().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const template = await db.getTemplateById(input.templateId, ctx.user.id);
+        if (!template) throw new Error("Template not found");
+
+        const scheduledAt = input.scheduledAt || new Date();
+        
+        const postId = await db.createPost({
+          userId: ctx.user.id,
+          title: template.title,
+          content: template.content,
+          contentType: template.contentType,
+          platform: template.platform,
+          scheduledAt,
+          templateId: template.id,
+          status: "scheduled",
+          reminderEnabled: true,
+        });
+
+        return { postId, scheduledAt };
+      }),
+  }),
+
+  // Notification Settings
+  notifications: router({
+    getSettings: protectedProcedure.query(({ ctx }) => {
+      return db.getUserNotificationSettings(ctx.user.id);
+    }),
+
+    updateSettings: protectedProcedure
+      .input(z.object({
+        pushEnabled: z.boolean().optional(),
+        emailEnabled: z.boolean().optional(),
+        reminderMinutesBefore: z.number().min(5).max(1440).optional(),
+        dailyDigestEnabled: z.boolean().optional(),
+        dailyDigestTime: z.string().optional(),
+        expoPushToken: z.string().optional(),
+      }))
+      .mutation(({ ctx, input }) => {
+        return db.upsertNotificationSettings(ctx.user.id, input);
+      }),
+
+    // Register push token from device
+    registerPushToken: protectedProcedure
+      .input(z.object({ token: z.string() }))
+      .mutation(({ ctx, input }) => {
+        return db.upsertNotificationSettings(ctx.user.id, { expoPushToken: input.token });
+      }),
+
+    // Send test notification
+    sendTest: protectedProcedure.mutation(async ({ ctx }) => {
+      const result = await notifyOwner({
+        title: "PostPal Test Notification",
+        content: `Test notification sent by user ${ctx.user.name || ctx.user.id} at ${new Date().toLocaleString()}`,
+      });
+      return { success: result };
+    }),
+
+    // Check for posts needing reminders (called by scheduled job)
+    checkReminders: protectedProcedure.mutation(async ({ ctx }) => {
+      const postsNeedingReminders = await db.getPostsNeedingReminders();
+      const userPosts = postsNeedingReminders.filter(p => p.userId === ctx.user.id);
+      
+      for (const post of userPosts) {
+        const settings = await db.getUserNotificationSettings(post.userId);
+        if (settings?.pushEnabled) {
+          // Send notification via owner notification (in production, use Expo Push)
+          await notifyOwner({
+            title: `Reminder: "${post.title}" scheduled soon`,
+            content: `Your post "${post.title}" is scheduled for ${post.scheduledAt?.toLocaleString()}. Review it before it goes live!`,
+          });
+          await db.markReminderSent(post.id);
+        }
+      }
+      
+      return { processed: userPosts.length };
+    }),
   }),
 
   // Social Accounts

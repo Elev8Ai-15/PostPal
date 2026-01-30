@@ -1,6 +1,6 @@
-import { ScrollView, Text, View, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from "react-native";
+import { ScrollView, Text, View, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Modal } from "react-native";
 import { useState, useCallback } from "react";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
@@ -60,9 +60,11 @@ interface ContentCardProps {
   item: ContentItem;
   onPress: () => void;
   onDelete: () => void;
+  onDragStart: () => void;
+  isDragging: boolean;
 }
 
-function ContentCard({ item, onPress, onDelete }: ContentCardProps) {
+function ContentCard({ item, onPress, onDelete, onDragStart, isDragging }: ContentCardProps) {
   const colors = useColors();
   const typeColor = getTypeColor(item.type, colors);
   
@@ -74,23 +76,21 @@ function ContentCard({ item, onPress, onDelete }: ContentCardProps) {
 
   const handleLongPress = () => {
     triggerHaptic();
-    Alert.alert(
-      "Delete Post",
-      `Are you sure you want to delete "${item.title}"?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Delete", style: "destructive", onPress: onDelete },
-      ]
-    );
+    onDragStart();
   };
   
   return (
     <TouchableOpacity 
-      className="bg-surface rounded-xl p-4 mb-3 border border-border flex-row items-center"
+      className={`bg-surface rounded-xl p-4 mb-3 border border-border flex-row items-center ${isDragging ? "opacity-50" : ""}`}
       activeOpacity={0.7}
       onPress={onPress}
       onLongPress={handleLongPress}
+      delayLongPress={300}
     >
+      {/* Drag Handle */}
+      <View className="mr-2 opacity-50">
+        <IconSymbol name="line.3.horizontal" size={16} color={colors.muted} />
+      </View>
       <View 
         className="rounded-full p-2 mr-3"
         style={{ backgroundColor: `${typeColor}20` }}
@@ -124,14 +124,189 @@ function ContentCard({ item, onPress, onDelete }: ContentCardProps) {
   );
 }
 
+// Date Picker Modal for drag-and-drop rescheduling
+interface DatePickerModalProps {
+  visible: boolean;
+  onClose: () => void;
+  onSelectDate: (date: Date) => void;
+  currentDate: Date;
+  postTitle: string;
+}
+
+function DatePickerModal({ visible, onClose, onSelectDate, currentDate, postTitle }: DatePickerModalProps) {
+  const colors = useColors();
+  const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth());
+  const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
+  const [selectedDay, setSelectedDay] = useState(currentDate.getDate());
+
+  const daysInMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate();
+  const firstDayOfMonth = new Date(selectedYear, selectedMonth, 1).getDay();
+
+  const triggerHaptic = () => {
+    if (Platform.OS !== "web") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  };
+
+  const handleConfirm = () => {
+    const newDate = new Date(selectedYear, selectedMonth, selectedDay);
+    // Preserve the original time
+    newDate.setHours(currentDate.getHours(), currentDate.getMinutes(), 0, 0);
+    onSelectDate(newDate);
+  };
+
+  const renderDays = () => {
+    const days = [];
+    
+    for (let i = 0; i < firstDayOfMonth; i++) {
+      days.push(<View key={`empty-${i}`} style={styles.pickerDayCell} />);
+    }
+    
+    for (let day = 1; day <= daysInMonth; day++) {
+      const isSelected = day === selectedDay;
+      const isToday = 
+        day === new Date().getDate() && 
+        selectedMonth === new Date().getMonth() && 
+        selectedYear === new Date().getFullYear();
+      
+      days.push(
+        <TouchableOpacity
+          key={day}
+          style={styles.pickerDayCell}
+          onPress={() => {
+            triggerHaptic();
+            setSelectedDay(day);
+          }}
+          activeOpacity={0.7}
+        >
+          <View 
+            className={`w-9 h-9 rounded-full items-center justify-center ${
+              isSelected ? "bg-primary" : isToday ? "bg-primary/20" : ""
+            }`}
+          >
+            <Text 
+              className={`text-sm font-medium ${
+                isSelected ? "text-background" : isToday ? "text-primary" : "text-foreground"
+              }`}
+            >
+              {day}
+            </Text>
+          </View>
+        </TouchableOpacity>
+      );
+    }
+    
+    return days;
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={onClose}
+    >
+      <View className="flex-1 bg-background">
+        {/* Header */}
+        <View className="flex-row items-center justify-between px-5 py-4 border-b border-border">
+          <TouchableOpacity onPress={onClose} activeOpacity={0.7}>
+            <Text className="text-base text-primary">Cancel</Text>
+          </TouchableOpacity>
+          <Text className="text-lg font-semibold text-foreground">Move Post</Text>
+          <TouchableOpacity onPress={handleConfirm} activeOpacity={0.7}>
+            <Text className="text-base font-semibold text-primary">Confirm</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView className="flex-1" contentContainerStyle={{ padding: 20 }}>
+          {/* Post Info */}
+          <View className="bg-surface rounded-xl p-4 mb-6 border border-border">
+            <Text className="text-sm text-muted mb-1">Moving:</Text>
+            <Text className="text-base font-semibold text-foreground">{postTitle}</Text>
+          </View>
+
+          {/* Month Navigation */}
+          <View className="flex-row items-center justify-between mb-4">
+            <TouchableOpacity 
+              onPress={() => {
+                triggerHaptic();
+                if (selectedMonth === 0) {
+                  setSelectedMonth(11);
+                  setSelectedYear(selectedYear - 1);
+                } else {
+                  setSelectedMonth(selectedMonth - 1);
+                }
+              }} 
+              className="p-2" 
+              activeOpacity={0.7}
+            >
+              <IconSymbol name="chevron.left" size={24} color={colors.foreground} />
+            </TouchableOpacity>
+            <Text className="text-lg font-semibold text-foreground">
+              {MONTHS[selectedMonth]} {selectedYear}
+            </Text>
+            <TouchableOpacity 
+              onPress={() => {
+                triggerHaptic();
+                if (selectedMonth === 11) {
+                  setSelectedMonth(0);
+                  setSelectedYear(selectedYear + 1);
+                } else {
+                  setSelectedMonth(selectedMonth + 1);
+                }
+              }} 
+              className="p-2" 
+              activeOpacity={0.7}
+            >
+              <IconSymbol name="chevron.right" size={24} color={colors.foreground} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Day Headers */}
+          <View className="flex-row mb-2">
+            {DAYS.map((day) => (
+              <View key={day} style={styles.pickerDayCell}>
+                <Text className="text-xs font-medium text-muted">{day}</Text>
+              </View>
+            ))}
+          </View>
+
+          {/* Calendar Days */}
+          <View className="flex-row flex-wrap">
+            {renderDays()}
+          </View>
+
+          {/* Selected Date Preview */}
+          <View className="mt-6 bg-primary/10 rounded-xl p-4">
+            <Text className="text-sm text-muted mb-1">New date:</Text>
+            <Text className="text-lg font-semibold text-primary">
+              {new Date(selectedYear, selectedMonth, selectedDay).toLocaleDateString("en-US", {
+                weekday: "long",
+                month: "long",
+                day: "numeric",
+                year: "numeric"
+              })}
+            </Text>
+          </View>
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+}
+
 export default function CalendarScreen() {
   const colors = useColors();
+  const router = useRouter();
   const { isAuthenticated } = useAuth();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [editingPost, setEditingPost] = useState<ContentItem | null>(null);
   const [isScheduling, setIsScheduling] = useState(false);
+  
+  // Drag and drop state
+  const [draggingPost, setDraggingPost] = useState<ContentItem | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   // Fetch scheduled posts from backend
   const { data: scheduledPosts, isLoading, refetch } = trpc.posts.scheduled.useQuery(undefined, {
@@ -147,6 +322,10 @@ export default function CalendarScreen() {
   });
 
   const deletePostMutation = trpc.posts.delete.useMutation({
+    onSuccess: () => refetch(),
+  });
+
+  const rescheduleMutation = trpc.posts.reschedule.useMutation({
     onSuccess: () => refetch(),
   });
 
@@ -248,9 +427,6 @@ export default function CalendarScreen() {
           platform: data.platform,
           scheduledAt: data.scheduledAt,
         });
-        
-        // Also update the status to scheduled
-        // The create mutation returns the ID, but we need to update status
       }
 
       if (Platform.OS !== "web") {
@@ -278,20 +454,74 @@ export default function CalendarScreen() {
   };
 
   const handleDeletePost = async (item: ContentItem) => {
-    try {
-      await deletePostMutation.mutateAsync({ id: item.id });
-      if (Platform.OS !== "web") {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      }
-    } catch (error) {
-      Alert.alert("Error", "Failed to delete post. Please try again.");
-    }
+    Alert.alert(
+      "Delete Post",
+      `Are you sure you want to delete "${item.title}"?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deletePostMutation.mutateAsync({ id: item.id });
+              if (Platform.OS !== "web") {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              }
+            } catch (error) {
+              Alert.alert("Error", "Failed to delete post. Please try again.");
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleAddContent = () => {
     triggerHaptic();
     setEditingPost(null);
     setShowScheduleModal(true);
+  };
+
+  // Drag and drop handlers
+  const handleDragStart = (item: ContentItem) => {
+    if (Platform.OS !== "web") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+    setDraggingPost(item);
+    setShowDatePicker(true);
+  };
+
+  const handleReschedule = async (newDate: Date) => {
+    if (!draggingPost) return;
+
+    try {
+      await rescheduleMutation.mutateAsync({
+        id: draggingPost.id,
+        scheduledAt: newDate,
+      });
+
+      if (Platform.OS !== "web") {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+
+      Alert.alert(
+        "Rescheduled",
+        `"${draggingPost.title}" moved to ${newDate.toLocaleDateString("en-US", {
+          weekday: "long",
+          month: "long",
+          day: "numeric"
+        })}`
+      );
+    } catch (error) {
+      Alert.alert("Error", "Failed to reschedule post. Please try again.");
+      if (Platform.OS !== "web") {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }
+    } finally {
+      setDraggingPost(null);
+      setShowDatePicker(false);
+    }
   };
 
   const renderCalendarDays = () => {
@@ -357,7 +587,23 @@ export default function CalendarScreen() {
             <Text className="text-2xl font-bold text-foreground">Content Calendar</Text>
             <Text className="text-sm text-muted mt-1">Plan and schedule your content</Text>
           </View>
-          {isLoading && <ActivityIndicator size="small" color={colors.primary} />}
+          <View className="flex-row items-center">
+            {isLoading && <ActivityIndicator size="small" color={colors.primary} className="mr-3" />}
+            <TouchableOpacity
+              className="bg-surface border border-border rounded-full p-2"
+              onPress={() => router.push("/templates")}
+              activeOpacity={0.7}
+            >
+              <IconSymbol name="calendar" size={20} color={colors.primary} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Drag hint */}
+        <View className="px-5 pb-2">
+          <Text className="text-xs text-muted">
+            Tip: Long-press a post to move it to another date
+          </Text>
         </View>
 
         {/* Month Navigation */}
@@ -437,6 +683,8 @@ export default function CalendarScreen() {
                 item={item} 
                 onPress={() => handleEditPost(item)}
                 onDelete={() => handleDeletePost(item)}
+                onDragStart={() => handleDragStart(item)}
+                isDragging={draggingPost?.id === item.id}
               />
             ))
           ) : (
@@ -470,6 +718,20 @@ export default function CalendarScreen() {
         } : undefined}
         isLoading={isScheduling}
       />
+
+      {/* Date Picker Modal for Drag & Drop */}
+      {draggingPost && (
+        <DatePickerModal
+          visible={showDatePicker}
+          onClose={() => {
+            setShowDatePicker(false);
+            setDraggingPost(null);
+          }}
+          onSelectDate={handleReschedule}
+          currentDate={draggingPost.scheduledAt || new Date()}
+          postTitle={draggingPost.title}
+        />
+      )}
     </ScreenContainer>
   );
 }
@@ -481,5 +743,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 4,
+  },
+  pickerDayCell: {
+    width: "14.28%",
+    aspectRatio: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

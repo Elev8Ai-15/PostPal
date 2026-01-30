@@ -53,6 +53,7 @@ const MAPPING: Record<string, MaterialIconName> = {
   "questionmark.circle": "help",
   "checkmark": "check",
   "minus": "remove",
+  "line.3.horizontal": "drag-handle",
 };
 
 type IconSymbolName = keyof typeof MAPPING;

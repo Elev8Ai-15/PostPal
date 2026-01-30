@@ -240,3 +240,124 @@ export async function getDashboardStats(userId: number) {
     publishedCount: published.length,
   };
 }
+
+
+// ============ POST TEMPLATES (Recurring) ============
+
+import {
+  postTemplates,
+  notificationSettings,
+  InsertPostTemplate,
+  InsertNotificationSettings,
+} from "../drizzle/schema";
+
+export async function getUserTemplates(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(postTemplates).where(eq(postTemplates.userId, userId)).orderBy(desc(postTemplates.createdAt));
+}
+
+export async function getActiveTemplates(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(postTemplates).where(and(eq(postTemplates.userId, userId), eq(postTemplates.isActive, true)));
+}
+
+export async function getTemplateById(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(postTemplates).where(and(eq(postTemplates.id, id), eq(postTemplates.userId, userId)));
+  return result[0] || null;
+}
+
+export async function createTemplate(data: InsertPostTemplate) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(postTemplates).values(data);
+  return result[0].insertId;
+}
+
+export async function updateTemplate(id: number, userId: number, data: Partial<InsertPostTemplate>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(postTemplates).set(data).where(and(eq(postTemplates.id, id), eq(postTemplates.userId, userId)));
+}
+
+export async function deleteTemplate(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(postTemplates).where(and(eq(postTemplates.id, id), eq(postTemplates.userId, userId)));
+}
+
+// ============ NOTIFICATION SETTINGS ============
+
+export async function getUserNotificationSettings(userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(notificationSettings).where(eq(notificationSettings.userId, userId));
+  return result[0] || null;
+}
+
+export async function upsertNotificationSettings(userId: number, data: Partial<InsertNotificationSettings>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const existing = await getUserNotificationSettings(userId);
+  if (existing) {
+    await db.update(notificationSettings).set(data).where(eq(notificationSettings.userId, userId));
+  } else {
+    await db.insert(notificationSettings).values({ userId, ...data });
+  }
+}
+
+// ============ POSTS WITH REMINDERS ============
+
+export async function getPostsNeedingReminders() {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const now = new Date();
+  // Get posts scheduled within the next hour that haven't had reminders sent
+  const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
+  
+  return db.select().from(posts).where(
+    and(
+      eq(posts.status, "scheduled"),
+      eq(posts.reminderEnabled, true),
+      eq(posts.reminderSent, false),
+      gte(posts.scheduledAt, now),
+      lte(posts.scheduledAt, oneHourFromNow)
+    )
+  );
+}
+
+export async function markReminderSent(postId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(posts).set({ reminderSent: true }).where(eq(posts.id, postId));
+}
+
+// ============ RECURRING POSTS GENERATION ============
+
+export async function getTemplatesNeedingGeneration() {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const now = new Date();
+  
+  return db.select().from(postTemplates).where(
+    and(
+      eq(postTemplates.isActive, true),
+      lte(postTemplates.nextScheduledAt, now)
+    )
+  );
+}
+
+export async function updateTemplateNextSchedule(id: number, nextScheduledAt: Date) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(postTemplates).set({ 
+    lastGeneratedAt: new Date(),
+    nextScheduledAt 
+  }).where(eq(postTemplates.id, id));
+}

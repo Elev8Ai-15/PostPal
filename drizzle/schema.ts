@@ -57,12 +57,42 @@ export const posts = mysqlTable("posts", {
   engagementScore: int("engagementScore").default(0),
   impressions: int("impressions").default(0),
   clicks: int("clicks").default(0),
+  // Notification reminder settings
+  reminderEnabled: boolean("reminderEnabled").default(true).notNull(),
+  reminderMinutesBefore: int("reminderMinutesBefore").default(30),
+  reminderSent: boolean("reminderSent").default(false).notNull(),
+  // Recurring post reference
+  templateId: int("templateId"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
 export type Post = typeof posts.$inferSelect;
 export type InsertPost = typeof posts.$inferInsert;
+
+/**
+ * Recurring post templates
+ */
+export const postTemplates = mysqlTable("post_templates", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  title: varchar("title", { length: 255 }).notNull(),
+  content: text("content").notNull(),
+  contentType: mysqlEnum("contentType", ["social", "blog", "newsletter", "video"]).notNull(),
+  platform: mysqlEnum("platform", ["instagram", "twitter", "linkedin", "facebook", "youtube", "email", "blog"]),
+  // Recurrence settings
+  recurrenceType: mysqlEnum("recurrenceType", ["daily", "weekly", "biweekly", "monthly"]).notNull(),
+  recurrenceDays: varchar("recurrenceDays", { length: 50 }), // e.g., "1,3,5" for Mon, Wed, Fri
+  recurrenceTime: varchar("recurrenceTime", { length: 10 }), // e.g., "09:00"
+  isActive: boolean("isActive").default(true).notNull(),
+  lastGeneratedAt: timestamp("lastGeneratedAt"),
+  nextScheduledAt: timestamp("nextScheduledAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type PostTemplate = typeof postTemplates.$inferSelect;
+export type InsertPostTemplate = typeof postTemplates.$inferInsert;
 
 /**
  * Analytics data for tracking performance
@@ -101,3 +131,22 @@ export const strategies = mysqlTable("strategies", {
 
 export type Strategy = typeof strategies.$inferSelect;
 export type InsertStrategy = typeof strategies.$inferInsert;
+
+/**
+ * Notification settings for users
+ */
+export const notificationSettings = mysqlTable("notification_settings", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().unique(),
+  pushEnabled: boolean("pushEnabled").default(true).notNull(),
+  emailEnabled: boolean("emailEnabled").default(false).notNull(),
+  reminderMinutesBefore: int("reminderMinutesBefore").default(30).notNull(),
+  dailyDigestEnabled: boolean("dailyDigestEnabled").default(false).notNull(),
+  dailyDigestTime: varchar("dailyDigestTime", { length: 10 }).default("09:00"),
+  expoPushToken: text("expoPushToken"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type NotificationSettings = typeof notificationSettings.$inferSelect;
+export type InsertNotificationSettings = typeof notificationSettings.$inferInsert;

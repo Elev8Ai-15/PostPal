@@ -30,3 +30,9 @@
 - [x] Update backend to support scheduled posts with specific times
 - [x] Display scheduled posts on calendar with time indicators
 - [x] Add ability to edit/reschedule existing posts
+
+## New Features (v1.3)
+- [x] Push notification reminders for scheduled posts
+- [x] Recurring post templates (weekly/monthly schedules)
+- [x] Drag-and-drop rescheduling on calendar
+- [x] Comprehensive debug, calibration and stabilization scan

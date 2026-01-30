@@ -15,6 +15,13 @@
       "when": 1769743226438,
       "tag": "0001_low_marvex",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1769744338175,
+      "tag": "0002_rich_toxin",
+      "breakpoints": true
     }
   ]
 }
