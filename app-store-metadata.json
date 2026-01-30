@@ -1,0 +1,40 @@
+{
+  "appName": "PostPal",
+  "subtitle": "AI Marketing Assistant",
+  "description": {
+    "short": "Your AI-powered social media marketing assistant. Create, schedule, and analyze content across all platforms.",
+    "full": "PostPal is your intelligent marketing companion that helps you grow your social media presence with AI-powered content creation, smart scheduling, and comprehensive analytics.\n\nKEY FEATURES:\n\n• AI Content Generation - Create engaging posts with AI assistance. Choose your tone, add keywords, and let PostPal craft the perfect message for each platform.\n\n• Smart Scheduling - Plan your content calendar with ease. Schedule posts for optimal times and manage your entire content pipeline from one place.\n\n• Multi-Platform Support - Connect Instagram, Twitter, LinkedIn, Facebook, and YouTube. Manage all your social accounts in one unified dashboard.\n\n• Content Approval Workflow - Review AI-generated content before publishing. Approve, edit, or reject posts with a simple swipe.\n\n• Analytics & Insights - Track your performance with detailed analytics. Monitor engagement, follower growth, and content performance across all platforms.\n\n• Hashtag Suggestions - Get AI-powered hashtag recommendations to maximize your reach and engagement.\n\n• Platform Previews - See exactly how your posts will look on each platform before publishing.\n\n• Recurring Templates - Set up recurring content schedules for consistent posting.\n\n• Push Notifications - Get reminders before scheduled posts go live.\n\nWhether you're a small business owner, content creator, or marketing professional, PostPal helps you save time and grow your audience with intelligent automation."
+  },
+  "keywords": [
+    "social media",
+    "marketing",
+    "AI",
+    "content creation",
+    "scheduling",
+    "analytics",
+    "Instagram",
+    "Twitter",
+    "LinkedIn",
+    "automation"
+  ],
+  "category": {
+    "primary": "Business",
+    "secondary": "Productivity"
+  },
+  "ageRating": "4+",
+  "pricing": "Free",
+  "inAppPurchases": false,
+  "privacyPolicyUrl": "https://postpal.app/privacy",
+  "supportUrl": "https://postpal.app/support",
+  "marketingUrl": "https://postpal.app",
+  "screenshots": {
+    "required": [
+      "Dashboard with performance metrics",
+      "Content Calendar view",
+      "AI Content Creation",
+      "Content Approval workflow",
+      "Analytics dashboard"
+    ]
+  },
+  "releaseNotes": "Version 2.0 - App Store Ready Release\n\n• New official branding with updated logo\n• Orange/amber color scheme\n• AI-powered content generation\n• Smart scheduling with drag-and-drop\n• Multi-platform post previews\n• Hashtag suggestions\n• Push notification reminders\n• Recurring post templates\n• Comprehensive analytics\n• Full SEO optimization\n• ADA/WCAG accessibility compliance\n• Enterprise-grade security"
+}

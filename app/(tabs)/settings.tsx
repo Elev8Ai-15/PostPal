@@ -1,12 +1,12 @@
-import { ScrollView, Text, View, TouchableOpacity, StyleSheet, Switch, Alert } from "react-native";
+import { ScrollView, Text, View, TouchableOpacity, Switch, StyleSheet, Alert, Platform } from "react-native";
 import { useState } from "react";
 import { useRouter } from "expo-router";
+import { Image } from "expo-image";
 import { ScreenContainer } from "@/components/screen-container";
 import { useAuth } from "@/hooks/use-auth";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
 import * as Haptics from "expo-haptics";
-import { Platform } from "react-native";
 
 interface SettingItemProps {
   icon: string;
@@ -111,8 +111,15 @@ export default function SettingsScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
+        {/* Header with Logo */}
         <View className="px-5 pt-4 pb-6">
+          <View className="flex-row items-center justify-between mb-3">
+            <Image
+              source={require("@/assets/images/logo-header.png")}
+              style={{ width: 100, height: 35 }}
+              contentFit="contain"
+            />
+          </View>
           <Text className="text-2xl font-bold text-foreground">Settings</Text>
           <Text className="text-sm text-muted mt-1">Manage your account and preferences</Text>
         </View>

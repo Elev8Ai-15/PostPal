@@ -1,12 +1,12 @@
 import { Text, View, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
+import { Image } from "expo-image";
 import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
 import { useAuth } from "@/hooks/use-auth";
 import { startOAuthLogin } from "@/constants/oauth";
 import { useState, useEffect } from "react";
-import { Platform } from "react-native";
 
 export default function LoginScreen() {
   const colors = useColors();
@@ -43,11 +43,12 @@ export default function LoginScreen() {
       <View className="flex-1 px-6 justify-center">
         {/* Logo and Branding */}
         <View className="items-center mb-12">
-          <View className="w-24 h-24 rounded-3xl bg-primary items-center justify-center mb-6">
-            <IconSymbol name="paperplane.fill" size={48} color={colors.background} />
-          </View>
-          <Text className="text-3xl font-bold text-foreground">PostPal</Text>
-          <Text className="text-base text-muted mt-2 text-center">
+          <Image
+            source={require("@/assets/images/logo-full.png")}
+            style={styles.logo}
+            contentFit="contain"
+          />
+          <Text className="text-base text-muted mt-4 text-center">
             Your AI-powered marketing assistant
           </Text>
         </View>
@@ -126,4 +127,9 @@ function FeatureItem({ icon, title, description }: { icon: string; title: string
   );
 }
 
-const styles = StyleSheet.create({});
+const styles = StyleSheet.create({
+  logo: {
+    width: 200,
+    height: 250,
+  },
+});

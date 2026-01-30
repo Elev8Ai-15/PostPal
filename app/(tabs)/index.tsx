@@ -1,5 +1,6 @@
 import { ScrollView, Text, View, TouchableOpacity, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
+import { Image } from "expo-image";
 import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
@@ -123,8 +124,15 @@ export default function DashboardScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
+        {/* Header with Logo */}
         <View className="px-5 pt-4 pb-2">
+          <View className="flex-row items-center justify-between mb-2">
+            <Image
+              source={require("@/assets/images/logo-header.png")}
+              style={{ width: 120, height: 40 }}
+              contentFit="contain"
+            />
+          </View>
           <Text className="text-sm text-muted">{currentDate}</Text>
           <Text className="text-2xl font-bold text-foreground mt-1">Welcome back, Brad</Text>
         </View>
