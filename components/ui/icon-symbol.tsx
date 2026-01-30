@@ -1,24 +1,59 @@
 // Fallback for using MaterialIcons on Android and web.
 
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import { SymbolWeight, SymbolViewProps } from "expo-symbols";
+import { SymbolWeight } from "expo-symbols";
 import { ComponentProps } from "react";
 import { OpaqueColorValue, type StyleProp, type TextStyle } from "react-native";
 
-type IconMapping = Record<SymbolViewProps["name"], ComponentProps<typeof MaterialIcons>["name"]>;
-type IconSymbolName = keyof typeof MAPPING;
+type MaterialIconName = ComponentProps<typeof MaterialIcons>["name"];
 
 /**
  * Add your SF Symbols to Material Icons mappings here.
  * - see Material Icons in the [Icons Directory](https://icons.expo.fyi).
  * - see SF Symbols in the [SF Symbols](https://developer.apple.com/sf-symbols/) app.
  */
-const MAPPING = {
+const MAPPING: Record<string, MaterialIconName> = {
+  // Tab bar icons
   "house.fill": "home",
-  "paperplane.fill": "send",
-  "chevron.left.forwardslash.chevron.right": "code",
+  "calendar": "calendar-today",
+  "checkmark.circle.fill": "check-circle",
+  "chart.bar.fill": "bar-chart",
+  "gearshape.fill": "settings",
+  // Navigation icons
   "chevron.right": "chevron-right",
-} as IconMapping;
+  "chevron.left": "chevron-left",
+  // Action icons
+  "paperplane.fill": "send",
+  "plus": "add",
+  "xmark": "close",
+  "arrow.up.right": "trending-up",
+  "arrow.down.right": "trending-down",
+  "person.fill": "person",
+  "bell.fill": "notifications",
+  "pencil": "edit",
+  "trash": "delete",
+  "eye": "visibility",
+  "clock": "schedule",
+  "star.fill": "star",
+  "heart.fill": "favorite",
+  "share": "share",
+  // Content type icons
+  "photo": "image",
+  "video": "videocam",
+  "doc.text": "article",
+  "envelope": "email",
+  // Social platform icons
+  "camera": "camera-alt",
+  "message": "chat",
+  // Misc
+  "chevron.left.forwardslash.chevron.right": "code",
+  "info.circle": "info",
+  "questionmark.circle": "help",
+  "checkmark": "check",
+  "minus": "remove",
+};
+
+type IconSymbolName = keyof typeof MAPPING;
 
 /**
  * An icon component that uses native SF Symbols on iOS, and Material Icons on Android and web.
