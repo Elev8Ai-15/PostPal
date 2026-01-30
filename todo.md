@@ -106,3 +106,20 @@
 - [x] Update app.config.ts with new logo URL
 - [x] Prepare Android adaptive icon assets
 - [x] Test branding consistency across all screens
+
+## New Features (v2.1)
+- [x] Onboarding tutorial for first-launch users
+  - [x] Welcome screen with app introduction
+  - [x] Feature highlights walkthrough
+  - [x] Skip option and progress indicators
+  - [x] Persist onboarding completion state- [x] Unified Social Inbox
+  - [x] Database schema for messages, comments, mentions
+  - [x] Backend API routes for inbox management
+  - [x] Inbox screen with message list and filters
+  - [x] Saved replies functionality
+  - [x] Auto-responder rules
+  - [x] - [x] Real social media API integration
+  - [x] Social platform connection service
+  - [x] OAuth flow for platform authentication
+  - [x] Post publishing to connected platforms
+  - [x] Fetch real analytics data- [x] Comprehensive stabilization scan

@@ -152,3 +152,73 @@ export const notificationSettings = mysqlTable("notification_settings", {
 
 export type NotificationSettings = typeof notificationSettings.$inferSelect;
 export type InsertNotificationSettings = typeof notificationSettings.$inferInsert;
+
+
+/**
+ * Unified Social Inbox - Messages from all platforms
+ */
+export const inboxMessages = mysqlTable("inbox_messages", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  socialAccountId: int("socialAccountId").notNull(),
+  platform: mysqlEnum("platform", ["instagram", "twitter", "linkedin", "facebook", "youtube"]).notNull(),
+  messageType: mysqlEnum("messageType", ["dm", "comment", "mention", "reply"]).notNull(),
+  externalId: varchar("externalId", { length: 255 }), // ID from the social platform
+  senderName: varchar("senderName", { length: 255 }),
+  senderUsername: varchar("senderUsername", { length: 255 }),
+  senderAvatar: text("senderAvatar"),
+  content: text("content").notNull(),
+  postId: varchar("postId", { length: 255 }), // Reference to original post if comment/mention
+  postContent: text("postContent"), // Snippet of original post
+  isRead: boolean("isRead").default(false).notNull(),
+  isArchived: boolean("isArchived").default(false).notNull(),
+  isStarred: boolean("isStarred").default(false).notNull(),
+  sentiment: mysqlEnum("sentiment", ["positive", "neutral", "negative"]),
+  repliedAt: timestamp("repliedAt"),
+  receivedAt: timestamp("receivedAt").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type InboxMessage = typeof inboxMessages.$inferSelect;
+export type InsertInboxMessage = typeof inboxMessages.$inferInsert;
+
+/**
+ * Saved replies for quick responses
+ */
+export const savedReplies = mysqlTable("saved_replies", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  title: varchar("title", { length: 255 }).notNull(),
+  content: text("content").notNull(),
+  category: varchar("category", { length: 100 }),
+  shortcut: varchar("shortcut", { length: 50 }), // e.g., "/thanks" to quickly insert
+  useCount: int("useCount").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type SavedReply = typeof savedReplies.$inferSelect;
+export type InsertSavedReply = typeof savedReplies.$inferInsert;
+
+/**
+ * Auto-responder rules
+ */
+export const autoResponders = mysqlTable("auto_responders", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
+  triggerType: mysqlEnum("triggerType", ["keyword", "first_message", "mention", "all"]).notNull(),
+  triggerKeywords: text("triggerKeywords"), // Comma-separated keywords
+  platform: mysqlEnum("platform", ["instagram", "twitter", "linkedin", "facebook", "youtube", "all"]).default("all").notNull(),
+  messageType: mysqlEnum("messageType", ["dm", "comment", "mention", "all"]).default("all").notNull(),
+  responseContent: text("responseContent").notNull(),
+  delaySeconds: int("delaySeconds").default(0).notNull(),
+  useCount: int("useCount").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type AutoResponder = typeof autoResponders.$inferSelect;
+export type InsertAutoResponder = typeof autoResponders.$inferInsert;

@@ -6,6 +6,7 @@ import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { invokeLLM } from "./_core/llm";
 import { notifyOwner } from "./_core/notification";
 import * as db from "./db";
+import * as socialIntegration from "./social-integration";
 
 // Helper to calculate next scheduled date for recurring templates
 function calculateNextScheduledDate(
@@ -459,6 +460,189 @@ export const appRouter = router({
     }),
   }),
 
+  // Unified Social Inbox
+  inbox: router({
+    messages: protectedProcedure
+      .input(z.object({
+        platform: z.enum(["instagram", "twitter", "linkedin", "facebook", "youtube", "all"]).optional(),
+        messageType: z.enum(["dm", "comment", "mention", "reply", "all"]).optional(),
+        isRead: z.boolean().optional(),
+        isArchived: z.boolean().optional(),
+        isStarred: z.boolean().optional(),
+      }).optional())
+      .query(({ ctx, input }) => {
+        return db.getInboxMessages(ctx.user.id, input);
+      }),
+
+    getMessage: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(({ ctx, input }) => {
+        return db.getInboxMessageById(input.id, ctx.user.id);
+      }),
+
+    markRead: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(({ ctx, input }) => {
+        return db.markMessageRead(input.id, ctx.user.id);
+      }),
+
+    toggleStar: protectedProcedure
+      .input(z.object({ id: z.number(), isStarred: z.boolean() }))
+      .mutation(({ ctx, input }) => {
+        return db.markMessageStarred(input.id, ctx.user.id, input.isStarred);
+      }),
+
+    archive: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(({ ctx, input }) => {
+        return db.archiveMessage(input.id, ctx.user.id);
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(({ ctx, input }) => {
+        return db.deleteInboxMessage(input.id, ctx.user.id);
+      }),
+
+    unreadCount: protectedProcedure.query(({ ctx }) => {
+      return db.getUnreadCount(ctx.user.id);
+    }),
+
+    // Saved Replies
+    savedReplies: protectedProcedure.query(({ ctx }) => {
+      return db.getSavedReplies(ctx.user.id);
+    }),
+
+    createSavedReply: protectedProcedure
+      .input(z.object({
+        title: z.string().min(1).max(255),
+        content: z.string().min(1),
+        category: z.string().optional(),
+        shortcut: z.string().optional(),
+      }))
+      .mutation(({ ctx, input }) => {
+        return db.createSavedReply({
+          userId: ctx.user.id,
+          title: input.title,
+          content: input.content,
+          category: input.category,
+          shortcut: input.shortcut,
+        });
+      }),
+
+    updateSavedReply: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        title: z.string().optional(),
+        content: z.string().optional(),
+        category: z.string().optional(),
+        shortcut: z.string().optional(),
+      }))
+      .mutation(({ ctx, input }) => {
+        const { id, ...data } = input;
+        return db.updateSavedReply(id, ctx.user.id, data);
+      }),
+
+    deleteSavedReply: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(({ ctx, input }) => {
+        return db.deleteSavedReply(input.id, ctx.user.id);
+      }),
+
+    useSavedReply: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(({ ctx, input }) => {
+        return db.incrementSavedReplyUseCount(input.id, ctx.user.id);
+      }),
+
+    // Auto Responders
+    autoResponders: protectedProcedure.query(({ ctx }) => {
+      return db.getAutoResponders(ctx.user.id);
+    }),
+
+    createAutoResponder: protectedProcedure
+      .input(z.object({
+        name: z.string().min(1).max(255),
+        triggerType: z.enum(["keyword", "first_message", "mention", "all"]),
+        triggerKeywords: z.string().optional(),
+        platform: z.enum(["instagram", "twitter", "linkedin", "facebook", "youtube", "all"]).optional(),
+        messageType: z.enum(["dm", "comment", "mention", "all"]).optional(),
+        responseContent: z.string().min(1),
+        delaySeconds: z.number().min(0).max(3600).optional(),
+      }))
+      .mutation(({ ctx, input }) => {
+        return db.createAutoResponder({
+          userId: ctx.user.id,
+          name: input.name,
+          triggerType: input.triggerType,
+          triggerKeywords: input.triggerKeywords,
+          platform: input.platform || "all",
+          messageType: input.messageType || "all",
+          responseContent: input.responseContent,
+          delaySeconds: input.delaySeconds || 0,
+          isActive: true,
+        });
+      }),
+
+    updateAutoResponder: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        name: z.string().optional(),
+        triggerType: z.enum(["keyword", "first_message", "mention", "all"]).optional(),
+        triggerKeywords: z.string().optional(),
+        platform: z.enum(["instagram", "twitter", "linkedin", "facebook", "youtube", "all"]).optional(),
+        messageType: z.enum(["dm", "comment", "mention", "all"]).optional(),
+        responseContent: z.string().optional(),
+        delaySeconds: z.number().optional(),
+        isActive: z.boolean().optional(),
+      }))
+      .mutation(({ ctx, input }) => {
+        const { id, ...data } = input;
+        return db.updateAutoResponder(id, ctx.user.id, data);
+      }),
+
+    deleteAutoResponder: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(({ ctx, input }) => {
+        return db.deleteAutoResponder(input.id, ctx.user.id);
+      }),
+
+    // AI-powered reply suggestion
+    suggestReply: protectedProcedure
+      .input(z.object({
+        messageContent: z.string().min(1),
+        senderName: z.string().optional(),
+        tone: z.enum(["professional", "friendly", "casual", "empathetic"]).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const toneInstructions = {
+          professional: "Use a professional and courteous tone.",
+          friendly: "Use a warm and friendly tone.",
+          casual: "Use a casual and relaxed tone.",
+          empathetic: "Use an empathetic and understanding tone.",
+        };
+
+        const response = await invokeLLM({
+          messages: [
+            {
+              role: "system",
+              content: `You are a helpful social media manager assistant. Generate a thoughtful reply to the message.
+${input.tone ? toneInstructions[input.tone] : toneInstructions.friendly}
+Keep the reply concise but helpful. Return JSON: { "reply": "your suggested reply", "alternatives": ["alt1", "alt2"] }`
+            },
+            {
+              role: "user",
+              content: `Generate a reply to this message${input.senderName ? ` from ${input.senderName}` : ""}:\n"${input.messageContent}"`
+            },
+          ],
+          response_format: { type: "json_object" },
+        });
+
+        const content = response.choices[0].message.content;
+        return JSON.parse(typeof content === "string" ? content : "{}");
+      }),
+  }),
+
   // AI Content Generation
   ai: router({
     generateContent: protectedProcedure
@@ -679,6 +863,126 @@ ${input.currentChallenges ? `Current Challenges: ${input.currentChallenges}` : "
         const strategyContent = response.choices[0].message.content;
         const strategy = JSON.parse(typeof strategyContent === 'string' ? strategyContent : "{}");
         return strategy;
+      }),
+  }),
+
+  // Social Media Integration
+  social: router({
+    // Get OAuth authorization URL
+    getAuthUrl: protectedProcedure
+      .input(z.object({
+        platform: z.enum(["instagram", "twitter", "linkedin", "facebook", "youtube"]),
+        redirectUri: z.string(),
+      }))
+      .query(({ input }) => {
+        // In production, use real client IDs from environment variables
+        const clientId = process.env[`${input.platform.toUpperCase()}_CLIENT_ID`] || "demo_client_id";
+        const state = `${input.platform}_${Date.now()}`;
+        const authUrl = socialIntegration.getAuthorizationUrl(
+          input.platform,
+          clientId,
+          input.redirectUri,
+          state
+        );
+        return { authUrl, state };
+      }),
+
+    // Exchange auth code for tokens
+    exchangeToken: protectedProcedure
+      .input(z.object({
+        platform: z.enum(["instagram", "twitter", "linkedin", "facebook", "youtube"]),
+        code: z.string(),
+        redirectUri: z.string(),
+      }))
+      .mutation(async ({ input }) => {
+        const clientId = process.env[`${input.platform.toUpperCase()}_CLIENT_ID`] || "demo_client_id";
+        const clientSecret = process.env[`${input.platform.toUpperCase()}_CLIENT_SECRET`] || "demo_client_secret";
+        
+        const credentials = await socialIntegration.exchangeCodeForToken(
+          input.platform,
+          input.code,
+          clientId,
+          clientSecret,
+          input.redirectUri
+        );
+        return credentials;
+      }),
+
+    // Publish post to platform
+    publishPost: protectedProcedure
+      .input(z.object({
+        platform: z.enum(["instagram", "twitter", "linkedin", "facebook", "youtube"]),
+        accessToken: z.string(),
+        content: z.string(),
+        imageUrl: z.string().optional(),
+        hashtags: z.array(z.string()).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const result = await socialIntegration.publishPost(
+          input.platform,
+          { accessToken: input.accessToken },
+          {
+            content: input.content,
+            imageUrl: input.imageUrl,
+            hashtags: input.hashtags,
+          }
+        );
+        return result;
+      }),
+
+    // Fetch analytics from platform
+    fetchAnalytics: protectedProcedure
+      .input(z.object({
+        platform: z.enum(["instagram", "twitter", "linkedin", "facebook", "youtube"]),
+        accessToken: z.string(),
+        accountId: z.string(),
+      }))
+      .query(async ({ input }) => {
+        const analytics = await socialIntegration.fetchAnalytics(
+          input.platform,
+          { accessToken: input.accessToken },
+          input.accountId
+        );
+        return analytics;
+      }),
+
+    // Fetch messages from platform
+    fetchMessages: protectedProcedure
+      .input(z.object({
+        platform: z.enum(["instagram", "twitter", "linkedin", "facebook", "youtube"]),
+        accessToken: z.string(),
+        accountId: z.string(),
+      }))
+      .query(async ({ input }) => {
+        const messages = await socialIntegration.fetchMessages(
+          input.platform,
+          { accessToken: input.accessToken },
+          input.accountId
+        );
+        return messages;
+      }),
+
+    // Validate platform credentials
+    validateCredentials: protectedProcedure
+      .input(z.object({
+        platform: z.enum(["instagram", "twitter", "linkedin", "facebook", "youtube"]),
+        accessToken: z.string(),
+      }))
+      .query(async ({ input }) => {
+        const result = await socialIntegration.validateCredentials(
+          input.platform,
+          { accessToken: input.accessToken }
+        );
+        return result;
+      }),
+
+    // Get platform guidelines
+    getGuidelines: publicProcedure
+      .input(z.object({
+        platform: z.enum(["instagram", "twitter", "linkedin", "facebook", "youtube"]),
+      }))
+      .query(({ input }) => {
+        return socialIntegration.getPlatformGuidelines(input.platform);
       }),
   }),
 });

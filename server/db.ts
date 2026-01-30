@@ -361,3 +361,197 @@ export async function updateTemplateNextSchedule(id: number, nextScheduledAt: Da
     nextScheduledAt 
   }).where(eq(postTemplates.id, id));
 }
+
+// ============ UNIFIED SOCIAL INBOX ============
+
+import {
+  inboxMessages,
+  savedReplies,
+  autoResponders,
+  InsertInboxMessage,
+  InsertSavedReply,
+  InsertAutoResponder,
+} from "../drizzle/schema";
+
+// Inbox Messages
+export async function getInboxMessages(userId: number, filters?: {
+  platform?: string;
+  messageType?: string;
+  isRead?: boolean;
+  isArchived?: boolean;
+  isStarred?: boolean;
+}) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const conditions = [eq(inboxMessages.userId, userId)];
+  
+  if (filters?.platform && filters.platform !== "all") {
+    conditions.push(eq(inboxMessages.platform, filters.platform as any));
+  }
+  if (filters?.messageType && filters.messageType !== "all") {
+    conditions.push(eq(inboxMessages.messageType, filters.messageType as any));
+  }
+  if (filters?.isRead !== undefined) {
+    conditions.push(eq(inboxMessages.isRead, filters.isRead));
+  }
+  if (filters?.isArchived !== undefined) {
+    conditions.push(eq(inboxMessages.isArchived, filters.isArchived));
+  }
+  if (filters?.isStarred !== undefined) {
+    conditions.push(eq(inboxMessages.isStarred, filters.isStarred));
+  }
+  
+  return db.select().from(inboxMessages)
+    .where(and(...conditions))
+    .orderBy(desc(inboxMessages.receivedAt));
+}
+
+export async function getInboxMessageById(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(inboxMessages)
+    .where(and(eq(inboxMessages.id, id), eq(inboxMessages.userId, userId)));
+  return result[0] || null;
+}
+
+export async function createInboxMessage(data: InsertInboxMessage) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(inboxMessages).values(data);
+  return result[0].insertId;
+}
+
+export async function updateInboxMessage(id: number, userId: number, data: Partial<InsertInboxMessage>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(inboxMessages).set(data)
+    .where(and(eq(inboxMessages.id, id), eq(inboxMessages.userId, userId)));
+}
+
+export async function markMessageRead(id: number, userId: number) {
+  return updateInboxMessage(id, userId, { isRead: true });
+}
+
+export async function markMessageStarred(id: number, userId: number, isStarred: boolean) {
+  return updateInboxMessage(id, userId, { isStarred });
+}
+
+export async function archiveMessage(id: number, userId: number) {
+  return updateInboxMessage(id, userId, { isArchived: true });
+}
+
+export async function deleteInboxMessage(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(inboxMessages).where(and(eq(inboxMessages.id, id), eq(inboxMessages.userId, userId)));
+}
+
+export async function getUnreadCount(userId: number) {
+  const db = await getDb();
+  if (!db) return 0;
+  const result = await db.select().from(inboxMessages)
+    .where(and(eq(inboxMessages.userId, userId), eq(inboxMessages.isRead, false), eq(inboxMessages.isArchived, false)));
+  return result.length;
+}
+
+// Saved Replies
+export async function getSavedReplies(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(savedReplies)
+    .where(eq(savedReplies.userId, userId))
+    .orderBy(desc(savedReplies.useCount));
+}
+
+export async function getSavedReplyById(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(savedReplies)
+    .where(and(eq(savedReplies.id, id), eq(savedReplies.userId, userId)));
+  return result[0] || null;
+}
+
+export async function createSavedReply(data: InsertSavedReply) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(savedReplies).values(data);
+  return result[0].insertId;
+}
+
+export async function updateSavedReply(id: number, userId: number, data: Partial<InsertSavedReply>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(savedReplies).set(data)
+    .where(and(eq(savedReplies.id, id), eq(savedReplies.userId, userId)));
+}
+
+export async function deleteSavedReply(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(savedReplies).where(and(eq(savedReplies.id, id), eq(savedReplies.userId, userId)));
+}
+
+export async function incrementSavedReplyUseCount(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const reply = await getSavedReplyById(id, userId);
+  if (reply) {
+    await db.update(savedReplies).set({ useCount: reply.useCount + 1 })
+      .where(eq(savedReplies.id, id));
+  }
+}
+
+// Auto Responders
+export async function getAutoResponders(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(autoResponders)
+    .where(eq(autoResponders.userId, userId))
+    .orderBy(desc(autoResponders.createdAt));
+}
+
+export async function getActiveAutoResponders(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(autoResponders)
+    .where(and(eq(autoResponders.userId, userId), eq(autoResponders.isActive, true)));
+}
+
+export async function getAutoResponderById(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(autoResponders)
+    .where(and(eq(autoResponders.id, id), eq(autoResponders.userId, userId)));
+  return result[0] || null;
+}
+
+export async function createAutoResponder(data: InsertAutoResponder) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(autoResponders).values(data);
+  return result[0].insertId;
+}
+
+export async function updateAutoResponder(id: number, userId: number, data: Partial<InsertAutoResponder>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(autoResponders).set(data)
+    .where(and(eq(autoResponders.id, id), eq(autoResponders.userId, userId)));
+}
+
+export async function deleteAutoResponder(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(autoResponders).where(and(eq(autoResponders.id, id), eq(autoResponders.userId, userId)));
+}
+
+export async function incrementAutoResponderUseCount(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const responder = await db.select().from(autoResponders).where(eq(autoResponders.id, id));
+  if (responder[0]) {
+    await db.update(autoResponders).set({ useCount: responder[0].useCount + 1 })
+      .where(eq(autoResponders.id, id));
+  }
+}
