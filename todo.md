@@ -82,3 +82,15 @@
 - [x] Run comprehensive SEO audit
 - [x] Run accessibility compliance tests
 - [x] Run security vulnerability scan
+
+## New Features (v1.6) - Unified Social Inbox
+- [ ] Create database schema for inbox messages, conversations, and saved replies
+- [ ] Implement backend API routes for inbox management
+- [ ] Create Unified Inbox screen with message list
+- [ ] Add message filtering by platform, type, and status
+- [ ] Implement conversation threading
+- [ ] Create saved replies management
+- [ ] Implement auto-responder functionality
+- [ ] Add message tagging and assignment
+- [ ] Implement inbox analytics (response time, resolution rate)
+- [ ] Run comprehensive tests and validation

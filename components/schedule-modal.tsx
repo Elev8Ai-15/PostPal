@@ -7,13 +7,12 @@ import {
   TextInput,
   StyleSheet,
   ActivityIndicator,
-  Platform as RNPlatform,
+  Platform,
 } from "react-native";
 import { useState, useEffect } from "react";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
 import * as Haptics from "expo-haptics";
-import { Platform } from "react-native";
 
 const HOURS = Array.from({ length: 12 }, (_, i) => i + 1);
 const MINUTES = ["00", "15", "30", "45"];

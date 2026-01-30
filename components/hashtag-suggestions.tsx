@@ -191,7 +191,7 @@ export function HashtagSuggestions({
         <View style={styles.emptyState}>
           <IconSymbol name="sparkles" size={32} color={colors.muted} />
           <Text style={[styles.emptyText, { color: colors.muted }]}>
-            Tap "Generate" to get AI-powered hashtag suggestions based on your content
+            Tap &quot;Generate&quot; to get AI-powered hashtag suggestions based on your content
           </Text>
         </View>
       )}

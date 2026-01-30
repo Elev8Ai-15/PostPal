@@ -692,7 +692,7 @@ export default function CalendarScreen() {
               <IconSymbol name="calendar" size={40} color={colors.muted} />
               <Text className="text-base font-medium text-foreground mt-3">No content scheduled</Text>
               <Text className="text-sm text-muted mt-1 text-center">
-                Tap the "Add" button to schedule content for this day.
+                Tap the &quot;Add&quot; button to schedule content for this day.
               </Text>
             </View>
           )}
