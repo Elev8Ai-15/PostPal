@@ -54,6 +54,20 @@ const MAPPING: Record<string, MaterialIconName> = {
   "checkmark": "check",
   "minus": "remove",
   "line.3.horizontal": "drag-handle",
+  // Platform preview icons
+  "person.2.fill": "people",
+  "person.3.fill": "groups",
+  "play.circle.fill": "play-circle-filled",
+  "globe": "public",
+  "ellipsis": "more-horiz",
+  "heart": "favorite-border",
+  "bubble.left": "chat-bubble-outline",
+  "arrow.2.squarepath": "repeat",
+  "exclamationmark.triangle": "warning",
+  "lightbulb": "lightbulb",
+  "number": "tag",
+  "flame.fill": "local-fire-department",
+  "target": "gps-fixed",
 };
 
 type IconSymbolName = keyof typeof MAPPING;

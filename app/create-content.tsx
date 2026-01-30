@@ -6,6 +6,8 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
 import { useAuth } from "@/hooks/use-auth";
 import { trpc } from "@/lib/trpc";
+import { HashtagSuggestions } from "@/components/hashtag-suggestions";
+import { PlatformPreview } from "@/components/platform-preview";
 import * as Haptics from "expo-haptics";
 import { Platform } from "react-native";
 
@@ -65,6 +67,8 @@ export default function CreateContentScreen() {
   const [tone, setTone] = useState<Tone>("professional");
   const [topic, setTopic] = useState("");
   const [keywords, setKeywords] = useState("");
+  const [selectedHashtags, setSelectedHashtags] = useState<string[]>([]);
+  const [showPreview, setShowPreview] = useState(false);
   const [generatedContent, setGeneratedContent] = useState<{
     title: string;
     content: string;
@@ -81,6 +85,15 @@ export default function CreateContentScreen() {
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
+  };
+
+  const handleHashtagToggle = (hashtag: string) => {
+    triggerHaptic();
+    setSelectedHashtags(prev => 
+      prev.includes(hashtag) 
+        ? prev.filter(h => h !== hashtag)
+        : [...prev, hashtag]
+    );
   };
 
   const handleGenerate = async () => {
@@ -104,6 +117,7 @@ export default function CreateContentScreen() {
     triggerHaptic();
     setIsGenerating(true);
     setGeneratedContent(null);
+    setSelectedHashtags([]);
 
     try {
       const result = await generateMutation.mutateAsync({
@@ -115,6 +129,10 @@ export default function CreateContentScreen() {
       });
 
       setGeneratedContent(result);
+      // Auto-select generated hashtags
+      if (result.hashtags) {
+        setSelectedHashtags(result.hashtags);
+      }
       if (Platform.OS !== "web") {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
@@ -127,6 +145,14 @@ export default function CreateContentScreen() {
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  const getFullContent = () => {
+    if (!generatedContent) return "";
+    const hashtagString = selectedHashtags.length > 0 
+      ? `\n\n${selectedHashtags.map(h => `#${h}`).join(" ")}`
+      : "";
+    return generatedContent.content + hashtagString;
   };
 
   const handleSaveAsDraft = async () => {
@@ -143,7 +169,7 @@ export default function CreateContentScreen() {
     try {
       await createPostMutation.mutateAsync({
         title: generatedContent.title,
-        content: generatedContent.content + (generatedContent.hashtags ? `\n\n${generatedContent.hashtags.map(h => `#${h}`).join(" ")}` : ""),
+        content: getFullContent(),
         contentType,
         platform,
         aiGenerated: true,
@@ -171,16 +197,14 @@ export default function CreateContentScreen() {
     setIsSaving(true);
 
     try {
-      const postId = await createPostMutation.mutateAsync({
+      await createPostMutation.mutateAsync({
         title: generatedContent.title,
-        content: generatedContent.content + (generatedContent.hashtags ? `\n\n${generatedContent.hashtags.map(h => `#${h}`).join(" ")}` : ""),
+        content: getFullContent(),
         contentType,
         platform,
         aiGenerated: true,
       });
 
-      // Update status to pending
-      // Note: The create mutation returns the ID, we'd need to update it separately
       Alert.alert("Sent!", "Your content has been sent for approval.", [
         { text: "OK", onPress: () => router.back() },
       ]);
@@ -190,6 +214,9 @@ export default function CreateContentScreen() {
       setIsSaving(false);
     }
   };
+
+  // Check if platform supports preview
+  const supportsPreview = ["instagram", "twitter", "linkedin", "facebook", "youtube"].includes(platform);
 
   return (
     <ScreenContainer>
@@ -384,7 +411,7 @@ export default function CreateContentScreen() {
 
           {/* Generated Content Preview */}
           {generatedContent && (
-            <View className="px-5 pt-6 pb-8">
+            <View className="px-5 pt-6">
               <Text className="text-sm font-semibold text-foreground mb-3">Generated Content</Text>
               <View className="bg-surface border border-border rounded-xl p-4">
                 <Text className="text-lg font-bold text-foreground mb-2">
@@ -393,12 +420,18 @@ export default function CreateContentScreen() {
                 <Text className="text-base text-foreground leading-6 mb-4">
                   {generatedContent.content}
                 </Text>
-                {generatedContent.hashtags && generatedContent.hashtags.length > 0 && (
+                {selectedHashtags.length > 0 && (
                   <View className="flex-row flex-wrap mb-4">
-                    {generatedContent.hashtags.map((tag, index) => (
-                      <Text key={index} className="text-primary mr-2 mb-1">
-                        #{tag}
-                      </Text>
+                    {selectedHashtags.map((tag, index) => (
+                      <TouchableOpacity 
+                        key={index} 
+                        onPress={() => handleHashtagToggle(tag)}
+                        activeOpacity={0.7}
+                      >
+                        <Text className="text-primary mr-2 mb-1">
+                          #{tag}
+                        </Text>
+                      </TouchableOpacity>
                     ))}
                   </View>
                 )}
@@ -410,6 +443,51 @@ export default function CreateContentScreen() {
                   </View>
                 )}
               </View>
+
+              {/* Hashtag Suggestions */}
+              {contentType === "social" && (
+                <View className="mt-4">
+                  <HashtagSuggestions
+                    content={generatedContent.content}
+                    platform={platform as any}
+                    selectedHashtags={selectedHashtags}
+                    onHashtagToggle={handleHashtagToggle}
+                  />
+                </View>
+              )}
+
+              {/* Platform Preview Toggle */}
+              {supportsPreview && (
+                <TouchableOpacity
+                  className="mt-4 flex-row items-center justify-center py-3 bg-surface border border-border rounded-xl"
+                  onPress={() => {
+                    triggerHaptic();
+                    setShowPreview(!showPreview);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <IconSymbol 
+                    name={showPreview ? "eye" : "eye"} 
+                    size={18} 
+                    color={colors.primary} 
+                  />
+                  <Text className="ml-2 font-medium text-primary">
+                    {showPreview ? "Hide Platform Preview" : "Show Platform Preview"}
+                  </Text>
+                </TouchableOpacity>
+              )}
+
+              {/* Platform Preview */}
+              {showPreview && supportsPreview && (
+                <View className="mt-4">
+                  <PlatformPreview
+                    content={getFullContent()}
+                    hashtags={selectedHashtags}
+                    selectedPlatform={platform as any}
+                    onPlatformChange={(p) => setPlatform(p)}
+                  />
+                </View>
+              )}
 
               {/* Action Buttons */}
               <View className="flex-row mt-4">

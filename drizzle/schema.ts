@@ -53,6 +53,8 @@ export const posts = mysqlTable("posts", {
   scheduledAt: timestamp("scheduledAt"),
   publishedAt: timestamp("publishedAt"),
   imageUrl: text("imageUrl"),
+  thumbnailUrl: text("thumbnailUrl"),
+  hashtags: text("hashtags"),
   aiGenerated: boolean("aiGenerated").default(false).notNull(),
   engagementScore: int("engagementScore").default(0),
   impressions: int("impressions").default(0),

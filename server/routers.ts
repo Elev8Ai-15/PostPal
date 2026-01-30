@@ -544,6 +544,102 @@ Return your response as JSON:
         return result;
       }),
 
+    suggestHashtags: protectedProcedure
+      .input(z.object({
+        content: z.string().min(1),
+        platform: z.enum(["instagram", "twitter", "linkedin", "facebook", "youtube"]).optional(),
+        count: z.number().min(1).max(30).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const platformContext = {
+          instagram: "Instagram hashtags should be popular and discoverable. Include a mix of broad and niche tags. Maximum 30 hashtags.",
+          twitter: "Twitter hashtags should be trending and concise. Use 2-5 hashtags max for best engagement.",
+          linkedin: "LinkedIn hashtags should be professional and industry-specific. Use 3-5 hashtags.",
+          facebook: "Facebook hashtags should be minimal and highly relevant. Use 1-3 hashtags.",
+          youtube: "YouTube tags should be searchable keywords and phrases. Include variations.",
+        };
+
+        const response = await invokeLLM({
+          messages: [
+            {
+              role: "system",
+              content: `You are a social media hashtag expert. Analyze the content and suggest the most effective hashtags.
+${input.platform ? platformContext[input.platform] : "Suggest versatile hashtags that work across platforms."}
+
+Return your response as JSON:
+{
+  "hashtags": ["hashtag1", "hashtag2", ...],
+  "trending": ["trending1", "trending2"],
+  "niche": ["niche1", "niche2"],
+  "tips": "Brief tips for using these hashtags"
+}`
+            },
+            {
+              role: "user",
+              content: `Suggest ${input.count || 10} hashtags for this content:\n${input.content}`
+            },
+          ],
+          response_format: { type: "json_object" },
+        });
+
+        const resultContent = response.choices[0].message.content;
+        return JSON.parse(typeof resultContent === 'string' ? resultContent : "{}");
+      }),
+
+    generatePlatformPreview: protectedProcedure
+      .input(z.object({
+        content: z.string().min(1),
+        platform: z.enum(["instagram", "twitter", "linkedin", "facebook", "youtube"]),
+        imageUrl: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const platformLimits = {
+          instagram: { charLimit: 2200, hashtagLimit: 30, hasImage: true },
+          twitter: { charLimit: 280, hashtagLimit: 5, hasImage: true },
+          linkedin: { charLimit: 3000, hashtagLimit: 5, hasImage: true },
+          facebook: { charLimit: 63206, hashtagLimit: 3, hasImage: true },
+          youtube: { charLimit: 5000, hashtagLimit: 15, hasImage: false },
+        };
+
+        const limits = platformLimits[input.platform];
+        const contentLength = input.content.length;
+        const hashtagMatches = input.content.match(/#\w+/g) || [];
+        const hashtagCount = hashtagMatches.length;
+
+        // Truncate content if needed
+        let truncatedContent = input.content;
+        let isTruncated = false;
+        if (contentLength > limits.charLimit) {
+          truncatedContent = input.content.substring(0, limits.charLimit - 3) + "...";
+          isTruncated = true;
+        }
+
+        return {
+          platform: input.platform,
+          preview: {
+            content: truncatedContent,
+            imageUrl: input.imageUrl || null,
+            characterCount: contentLength,
+            characterLimit: limits.charLimit,
+            hashtagCount,
+            hashtagLimit: limits.hashtagLimit,
+            isTruncated,
+            isOverHashtagLimit: hashtagCount > limits.hashtagLimit,
+            warnings: [
+              ...(isTruncated ? [`Content exceeds ${limits.charLimit} character limit`] : []),
+              ...(hashtagCount > limits.hashtagLimit ? [`Too many hashtags (${hashtagCount}/${limits.hashtagLimit})`] : []),
+            ],
+          },
+          platformTips: {
+            instagram: "Square images (1:1) perform best. Use all 30 hashtags in first comment for cleaner look.",
+            twitter: "Keep it concise. Add an image to increase engagement by 150%.",
+            linkedin: "Professional tone works best. Tag relevant people and companies.",
+            facebook: "Questions and polls drive engagement. Native video gets 10x more reach.",
+            youtube: "First 100 characters of description are most important for SEO.",
+          }[input.platform],
+        };
+      }),
+
     generateStrategy: protectedProcedure
       .input(z.object({
         businessType: z.string().min(1),
