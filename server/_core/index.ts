@@ -6,6 +6,7 @@ import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
+import { securityHeaders, createRateLimiter, auditLog } from "../security";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -30,6 +31,12 @@ async function startServer() {
   const app = express();
   const server = createServer(app);
 
+  // Security headers middleware
+  app.use(securityHeaders);
+
+  // Rate limiting - 100 requests per minute per client
+  app.use(createRateLimiter({ windowMs: 60000, maxRequests: 100 }));
+
   // Enable CORS for all routes - reflect the request origin to support credentials
   app.use((req, res, next) => {
     const origin = req.headers.origin;
@@ -39,7 +46,7 @@ async function startServer() {
     res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
     res.header(
       "Access-Control-Allow-Headers",
-      "Origin, X-Requested-With, Content-Type, Accept, Authorization",
+      "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-CSRF-Token",
     );
     res.header("Access-Control-Allow-Credentials", "true");
 
@@ -48,6 +55,18 @@ async function startServer() {
       res.sendStatus(200);
       return;
     }
+    next();
+  });
+
+  // Log all API requests
+  app.use((req, res, next) => {
+    auditLog.log({
+      action: "http_request",
+      resource: req.path,
+      success: true,
+      ip: req.ip,
+      userAgent: req.headers["user-agent"],
+    });
     next();
   });
 

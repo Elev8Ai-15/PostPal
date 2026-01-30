@@ -1,0 +1,17 @@
+# PostPal Robots.txt
+# https://www.robotstxt.org/robotstxt.html
+
+User-agent: *
+Allow: /
+
+# Disallow admin and API routes
+Disallow: /api/
+Disallow: /oauth/
+Disallow: /_next/
+Disallow: /static/
+
+# Crawl delay for polite crawling
+Crawl-delay: 1
+
+# Sitemap location
+Sitemap: https://postpal.app/sitemap.xml
