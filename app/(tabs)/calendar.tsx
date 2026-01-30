@@ -1,8 +1,14 @@
-import { ScrollView, Text, View, TouchableOpacity, StyleSheet } from "react-native";
-import { useState } from "react";
+import { ScrollView, Text, View, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from "react-native";
+import { useState, useCallback } from "react";
+import { useFocusEffect } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
+import { useAuth } from "@/hooks/use-auth";
+import { trpc } from "@/lib/trpc";
+import { ScheduleModal, type ScheduleData } from "@/components/schedule-modal";
+import * as Haptics from "expo-haptics";
+import { Platform } from "react-native";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = [
@@ -11,42 +17,15 @@ const MONTHS = [
 ];
 
 interface ContentItem {
-  id: string;
+  id: number;
   title: string;
   type: "social" | "blog" | "newsletter" | "video";
   time: string;
   platform?: string;
+  content?: string;
+  scheduledAt?: Date;
+  status?: string;
 }
-
-interface ScheduledDay {
-  date: number;
-  items: ContentItem[];
-}
-
-// Sample data for the calendar
-const sampleSchedule: Record<string, ContentItem[]> = {
-  "2026-01-29": [
-    { id: "1", title: "Instagram Reel: Marketing Tips", type: "video", time: "10:00 AM", platform: "Instagram" },
-    { id: "2", title: "Twitter Thread: AI Trends", type: "social", time: "2:00 PM", platform: "Twitter" },
-  ],
-  "2026-01-30": [
-    { id: "3", title: "Blog: Content Strategy Guide", type: "blog", time: "9:00 AM" },
-  ],
-  "2026-01-31": [
-    { id: "4", title: "Weekly Newsletter", type: "newsletter", time: "8:00 AM" },
-    { id: "5", title: "LinkedIn Post: Industry Insights", type: "social", time: "12:00 PM", platform: "LinkedIn" },
-  ],
-  "2026-02-01": [
-    { id: "6", title: "Facebook Ad Campaign", type: "social", time: "11:00 AM", platform: "Facebook" },
-  ],
-  "2026-02-03": [
-    { id: "7", title: "YouTube Video: Tutorial", type: "video", time: "3:00 PM", platform: "YouTube" },
-    { id: "8", title: "Instagram Story Series", type: "social", time: "6:00 PM", platform: "Instagram" },
-  ],
-  "2026-02-05": [
-    { id: "9", title: "Blog: Case Study", type: "blog", time: "10:00 AM" },
-  ],
-};
 
 function getTypeColor(type: string, colors: any) {
   switch (type) {
@@ -68,18 +47,49 @@ function getTypeIcon(type: string) {
   }
 }
 
-interface ContentCardProps {
-  item: ContentItem;
+function formatTime(date: Date | string): string {
+  const d = new Date(date);
+  const hours = d.getHours();
+  const minutes = d.getMinutes();
+  const period = hours >= 12 ? "PM" : "AM";
+  const displayHours = hours > 12 ? hours - 12 : hours === 0 ? 12 : hours;
+  return `${displayHours}:${String(minutes).padStart(2, "0")} ${period}`;
 }
 
-function ContentCard({ item }: ContentCardProps) {
+interface ContentCardProps {
+  item: ContentItem;
+  onPress: () => void;
+  onDelete: () => void;
+}
+
+function ContentCard({ item, onPress, onDelete }: ContentCardProps) {
   const colors = useColors();
   const typeColor = getTypeColor(item.type, colors);
+  
+  const triggerHaptic = () => {
+    if (Platform.OS !== "web") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  };
+
+  const handleLongPress = () => {
+    triggerHaptic();
+    Alert.alert(
+      "Delete Post",
+      `Are you sure you want to delete "${item.title}"?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Delete", style: "destructive", onPress: onDelete },
+      ]
+    );
+  };
   
   return (
     <TouchableOpacity 
       className="bg-surface rounded-xl p-4 mb-3 border border-border flex-row items-center"
       activeOpacity={0.7}
+      onPress={onPress}
+      onLongPress={handleLongPress}
     >
       <View 
         className="rounded-full p-2 mr-3"
@@ -102,15 +112,52 @@ function ContentCard({ item }: ContentCardProps) {
           )}
         </View>
       </View>
-      <IconSymbol name="chevron.right" size={18} color={colors.muted} />
+      <View className="flex-row items-center">
+        {item.status === "scheduled" && (
+          <View className="bg-warning/20 px-2 py-1 rounded-full mr-2">
+            <Text className="text-xs text-warning font-medium">Scheduled</Text>
+          </View>
+        )}
+        <IconSymbol name="chevron.right" size={18} color={colors.muted} />
+      </View>
     </TouchableOpacity>
   );
 }
 
 export default function CalendarScreen() {
   const colors = useColors();
+  const { isAuthenticated } = useAuth();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [editingPost, setEditingPost] = useState<ContentItem | null>(null);
+  const [isScheduling, setIsScheduling] = useState(false);
+
+  // Fetch scheduled posts from backend
+  const { data: scheduledPosts, isLoading, refetch } = trpc.posts.scheduled.useQuery(undefined, {
+    enabled: isAuthenticated,
+  });
+
+  const createPostMutation = trpc.posts.create.useMutation({
+    onSuccess: () => refetch(),
+  });
+
+  const updatePostMutation = trpc.posts.update.useMutation({
+    onSuccess: () => refetch(),
+  });
+
+  const deletePostMutation = trpc.posts.delete.useMutation({
+    onSuccess: () => refetch(),
+  });
+
+  // Refetch when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      if (isAuthenticated) {
+        refetch();
+      }
+    }, [isAuthenticated, refetch])
+  );
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -126,20 +173,42 @@ export default function CalendarScreen() {
     setCurrentDate(new Date(year, month + 1, 1));
   };
 
-  const formatDateKey = (date: Date) => {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, "0");
-    const d = String(date.getDate()).padStart(2, "0");
-    return `${y}-${m}-${d}`;
+  const triggerHaptic = () => {
+    if (Platform.OS !== "web") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
   };
 
-  const getScheduleForDate = (day: number) => {
-    const dateKey = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    return sampleSchedule[dateKey] || [];
+  // Convert posts to calendar items
+  const getScheduleForDate = (day: number): ContentItem[] => {
+    if (!scheduledPosts) return [];
+    
+    const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    
+    return scheduledPosts
+      .filter(post => {
+        if (!post.scheduledAt) return false;
+        const postDate = new Date(post.scheduledAt);
+        const postDateStr = `${postDate.getFullYear()}-${String(postDate.getMonth() + 1).padStart(2, "0")}-${String(postDate.getDate()).padStart(2, "0")}`;
+        return postDateStr === dateStr;
+      })
+      .map(post => ({
+        id: post.id,
+        title: post.title,
+        type: post.contentType as "social" | "blog" | "newsletter" | "video",
+        time: post.scheduledAt ? formatTime(post.scheduledAt) : "",
+        platform: post.platform || undefined,
+        content: post.content,
+        scheduledAt: post.scheduledAt ? new Date(post.scheduledAt) : undefined,
+        status: post.status,
+      }))
+      .sort((a, b) => {
+        if (!a.scheduledAt || !b.scheduledAt) return 0;
+        return a.scheduledAt.getTime() - b.scheduledAt.getTime();
+      });
   };
 
-  const selectedDateKey = formatDateKey(selectedDate);
-  const selectedItems = sampleSchedule[selectedDateKey] || [];
+  const selectedItems = getScheduleForDate(selectedDate.getDate());
 
   const isToday = (day: number) => {
     const today = new Date();
@@ -156,6 +225,73 @@ export default function CalendarScreen() {
       month === selectedDate.getMonth() &&
       year === selectedDate.getFullYear()
     );
+  };
+
+  const handleSchedule = async (data: ScheduleData) => {
+    setIsScheduling(true);
+    try {
+      if (data.postId) {
+        // Update existing post
+        await updatePostMutation.mutateAsync({
+          id: data.postId,
+          title: data.title,
+          content: data.content,
+          scheduledAt: data.scheduledAt,
+          status: "scheduled",
+        });
+      } else {
+        // Create new post
+        await createPostMutation.mutateAsync({
+          title: data.title,
+          content: data.content,
+          contentType: data.contentType,
+          platform: data.platform,
+          scheduledAt: data.scheduledAt,
+        });
+        
+        // Also update the status to scheduled
+        // The create mutation returns the ID, but we need to update status
+      }
+
+      if (Platform.OS !== "web") {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+      
+      setShowScheduleModal(false);
+      setEditingPost(null);
+      Alert.alert("Success", data.postId ? "Post updated successfully!" : "Content scheduled successfully!");
+    } catch (error) {
+      console.error("Schedule error:", error);
+      Alert.alert("Error", "Failed to schedule content. Please try again.");
+      if (Platform.OS !== "web") {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }
+    } finally {
+      setIsScheduling(false);
+    }
+  };
+
+  const handleEditPost = (item: ContentItem) => {
+    triggerHaptic();
+    setEditingPost(item);
+    setShowScheduleModal(true);
+  };
+
+  const handleDeletePost = async (item: ContentItem) => {
+    try {
+      await deletePostMutation.mutateAsync({ id: item.id });
+      if (Platform.OS !== "web") {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    } catch (error) {
+      Alert.alert("Error", "Failed to delete post. Please try again.");
+    }
+  };
+
+  const handleAddContent = () => {
+    triggerHaptic();
+    setEditingPost(null);
+    setShowScheduleModal(true);
   };
 
   const renderCalendarDays = () => {
@@ -175,7 +311,10 @@ export default function CalendarScreen() {
         <TouchableOpacity
           key={day}
           style={styles.dayCell}
-          onPress={() => setSelectedDate(new Date(year, month, day))}
+          onPress={() => {
+            triggerHaptic();
+            setSelectedDate(new Date(year, month, day));
+          }}
           activeOpacity={0.7}
         >
           <View 
@@ -213,9 +352,12 @@ export default function CalendarScreen() {
     <ScreenContainer>
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         {/* Header */}
-        <View className="px-5 pt-4 pb-2">
-          <Text className="text-2xl font-bold text-foreground">Content Calendar</Text>
-          <Text className="text-sm text-muted mt-1">Plan and schedule your content</Text>
+        <View className="px-5 pt-4 pb-2 flex-row items-center justify-between">
+          <View>
+            <Text className="text-2xl font-bold text-foreground">Content Calendar</Text>
+            <Text className="text-sm text-muted mt-1">Plan and schedule your content</Text>
+          </View>
+          {isLoading && <ActivityIndicator size="small" color={colors.primary} />}
         </View>
 
         {/* Month Navigation */}
@@ -270,29 +412,64 @@ export default function CalendarScreen() {
 
         {/* Selected Day Content */}
         <View className="px-5 pb-8">
-          <Text className="text-lg font-semibold text-foreground mb-3">
-            {selectedDate.toLocaleDateString("en-US", { 
-              weekday: "long", 
-              month: "long", 
-              day: "numeric" 
-            })}
-          </Text>
+          <View className="flex-row items-center justify-between mb-3">
+            <Text className="text-lg font-semibold text-foreground">
+              {selectedDate.toLocaleDateString("en-US", { 
+                weekday: "long", 
+                month: "long", 
+                day: "numeric" 
+              })}
+            </Text>
+            <TouchableOpacity
+              className="bg-primary px-4 py-2 rounded-full flex-row items-center"
+              onPress={handleAddContent}
+              activeOpacity={0.7}
+            >
+              <IconSymbol name="plus" size={16} color={colors.background} />
+              <Text className="text-sm font-semibold text-background ml-1">Add</Text>
+            </TouchableOpacity>
+          </View>
           
           {selectedItems.length > 0 ? (
             selectedItems.map((item) => (
-              <ContentCard key={item.id} item={item} />
+              <ContentCard 
+                key={item.id} 
+                item={item} 
+                onPress={() => handleEditPost(item)}
+                onDelete={() => handleDeletePost(item)}
+              />
             ))
           ) : (
             <View className="bg-surface rounded-xl p-6 border border-border items-center">
               <IconSymbol name="calendar" size={40} color={colors.muted} />
               <Text className="text-base font-medium text-foreground mt-3">No content scheduled</Text>
               <Text className="text-sm text-muted mt-1 text-center">
-                This day is free. Add content to your calendar.
+                Tap the "Add" button to schedule content for this day.
               </Text>
             </View>
           )}
         </View>
       </ScrollView>
+
+      {/* Schedule Modal */}
+      <ScheduleModal
+        visible={showScheduleModal}
+        onClose={() => {
+          setShowScheduleModal(false);
+          setEditingPost(null);
+        }}
+        onSchedule={handleSchedule}
+        selectedDate={selectedDate}
+        existingPost={editingPost ? {
+          id: editingPost.id,
+          title: editingPost.title,
+          content: editingPost.content || "",
+          contentType: editingPost.type,
+          platform: editingPost.platform,
+          scheduledAt: editingPost.scheduledAt,
+        } : undefined}
+        isLoading={isScheduling}
+      />
     </ScreenContainer>
   );
 }

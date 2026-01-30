@@ -93,6 +93,18 @@ export const appRouter = router({
       .mutation(({ ctx, input }) => {
         return db.deletePost(input.id, ctx.user.id);
       }),
+
+    schedule: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        scheduledAt: z.date(),
+      }))
+      .mutation(({ ctx, input }) => {
+        return db.updatePost(input.id, ctx.user.id, {
+          scheduledAt: input.scheduledAt,
+          status: "scheduled",
+        });
+      }),
   }),
 
   // Social Accounts

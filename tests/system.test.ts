@@ -94,6 +94,8 @@ describe("tRPC Router Structure", () => {
     expect(procedures).toContain("posts.pending");
     expect(procedures).toContain("posts.approve");
     expect(procedures).toContain("posts.reject");
+    expect(procedures).toContain("posts.scheduled");
+    expect(procedures).toContain("posts.schedule");
   });
 
   it("should have socialAccounts router with required procedures", async () => {
@@ -202,6 +204,20 @@ describe("Frontend Component Structure", () => {
     expect(fs.existsSync(path.join(appDir, "login.tsx"))).toBe(true);
     expect(fs.existsSync(path.join(appDir, "create-content.tsx"))).toBe(true);
     expect(fs.existsSync(path.join(appDir, "social-accounts.tsx"))).toBe(true);
+  });
+
+  it("should have schedule modal component", async () => {
+    const fs = await import("fs");
+    const path = await import("path");
+    
+    const componentPath = path.join(process.cwd(), "components/schedule-modal.tsx");
+    expect(fs.existsSync(componentPath)).toBe(true);
+    
+    const content = fs.readFileSync(componentPath, "utf-8");
+    expect(content).toContain("ScheduleModal");
+    expect(content).toContain("ScheduleData");
+    expect(content).toContain("selectedDate");
+    expect(content).toContain("onSchedule");
   });
 });
 

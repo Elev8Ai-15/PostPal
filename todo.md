@@ -23,3 +23,10 @@
 - [x] Social media API integration (Instagram, Twitter, LinkedIn)
 - [x] Content creation flow with AI assistance
 - [x] Comprehensive backend and frontend system check
+
+## New Features (v1.2)
+- [x] Create scheduling modal component with date/time picker
+- [x] Add schedule post functionality to calendar screen
+- [x] Update backend to support scheduled posts with specific times
+- [x] Display scheduled posts on calendar with time indicators
+- [x] Add ability to edit/reschedule existing posts
