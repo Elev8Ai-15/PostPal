@@ -231,15 +231,16 @@ describe("PostPal v2.1 Stabilization Tests", () => {
     });
 
     it("should have all required components", () => {
+      // Note: accessible-button.tsx and accessible-input.tsx were removed in v2.5 cleanup
       const components = [
         "components/screen-container.tsx",
         "components/content-card.tsx",
         "components/schedule-modal.tsx",
         "components/platform-preview.tsx",
         "components/hashtag-suggestions.tsx",
-        "components/accessible-button.tsx",
-        "components/accessible-input.tsx",
         "components/seo-head.tsx",
+        "components/feature-gate.tsx",
+        "components/subreddit-suggestions.tsx",
       ];
       
       components.forEach(component => {

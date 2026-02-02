@@ -79,6 +79,31 @@ async function startServer() {
     res.json({ ok: true, timestamp: Date.now() });
   });
 
+  // Stripe webhook endpoint - must use raw body for signature verification
+  app.post("/api/webhooks/stripe", express.raw({ type: "application/json" }), async (req, res) => {
+    const sig = req.headers["stripe-signature"];
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+    if (!sig || !webhookSecret) {
+      console.warn("[Stripe Webhook] Missing signature or webhook secret");
+      res.status(400).json({ error: "Missing signature or webhook secret" });
+      return;
+    }
+
+    try {
+      const { verifyWebhookSignature, processWebhookEvent } = await import("../stripe");
+      const event = verifyWebhookSignature(req.body, sig as string, webhookSecret);
+      
+      console.log(`[Stripe Webhook] Received event: ${event.type}`);
+      const result = await processWebhookEvent(event);
+      
+      res.json({ received: true, ...result });
+    } catch (err: any) {
+      console.error(`[Stripe Webhook] Error: ${err.message}`);
+      res.status(400).json({ error: err.message });
+    }
+  });
+
   app.use(
     "/api/trpc",
     createExpressMiddleware({

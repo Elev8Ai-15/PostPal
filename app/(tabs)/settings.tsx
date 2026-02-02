@@ -222,6 +222,13 @@ export default function SettingsScreen() {
             subtitle="View plans and billing"
             onPress={() => router.push("/subscription")}
           />
+          <Divider />
+          <SettingItem
+            icon="chart.bar.fill"
+            title="Usage Dashboard"
+            subtitle="View your usage and limits"
+            onPress={() => router.push("/usage-dashboard")}
+          />
         </SettingSection>
 
         {/* Connected Accounts */}

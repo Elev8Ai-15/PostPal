@@ -160,12 +160,14 @@ describe("PostPal v1.5 Compliance Validation", () => {
     });
 
     describe("Accessible Components", () => {
-      it("should have accessible button component", () => {
+      // Note: accessible-button and accessible-input were removed as unused in v2.5 cleanup
+      // Accessibility is now handled inline in components using accessibilityLabel and accessibilityRole
+      it.skip("should have accessible button component (removed in v2.5)", () => {
         const filePath = path.join(PROJECT_ROOT, "components/accessible-button.tsx");
         expect(fs.existsSync(filePath)).toBe(true);
       });
 
-      it("should have accessible input component", () => {
+      it.skip("should have accessible input component (removed in v2.5)", () => {
         const filePath = path.join(PROJECT_ROOT, "components/accessible-input.tsx");
         expect(fs.existsSync(filePath)).toBe(true);
       });
@@ -175,7 +177,7 @@ describe("PostPal v1.5 Compliance Validation", () => {
         expect(fs.existsSync(filePath)).toBe(true);
       });
 
-      it("accessible button should have minimum touch target size", () => {
+      it.skip("accessible button should have minimum touch target size (removed in v2.5)", () => {
         const content = fs.readFileSync(
           path.join(PROJECT_ROOT, "components/accessible-button.tsx"),
           "utf-8"
@@ -184,7 +186,7 @@ describe("PostPal v1.5 Compliance Validation", () => {
         expect(content).toContain("minHeight: 44");
       });
 
-      it("accessible input should have proper labeling", () => {
+      it.skip("accessible input should have proper labeling (removed in v2.5)", () => {
         const content = fs.readFileSync(
           path.join(PROJECT_ROOT, "components/accessible-input.tsx"),
           "utf-8"

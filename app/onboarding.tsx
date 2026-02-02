@@ -85,7 +85,8 @@ export default function OnboardingScreen() {
     } catch (error) {
       console.error("Failed to save onboarding state:", error);
     }
-    router.replace("/(tabs)");
+    // Navigate to upsell screen to show tier options
+    router.replace("/onboarding-upsell");
   };
 
   const renderSlide = ({ item }: { item: OnboardingSlide }) => (

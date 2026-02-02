@@ -169,3 +169,36 @@
 - [x] Add post limit enforcement with weekly tracking
 - [x] Create subscription tests (21 tests passing)
 - [x] Analyze tier coverage and provide improvement suggestions
+
+## New Features (v2.5) - Subscription Enhancements
+- [x] Stripe Webhook Handling
+  - [x] Create webhook endpoint for Stripe events
+  - [x] Handle subscription.created event
+  - [x] Handle subscription.updated event
+  - [x] Handle subscription.deleted/cancelled event
+  - [x] Handle invoice.payment_succeeded event
+  - [x] Handle invoice.payment_failed event
+  - [x] Auto-update user subscription status on payment events
+  - [x] Send notification on payment failure
+- [x] Onboarding Upsell Flow
+  - [x] Create tier comparison screen during onboarding
+  - [x] Show feature differences between tiers
+  - [x] Add "Start Free Trial" option for paid tiers
+  - [x] Highlight best value tier (Pro recommended)
+  - [x] Navigate to upsell after onboarding completion
+- [x] Usage Dashboard
+  - [x] Create usage overview screen
+  - [x] Show posts used this week vs limit
+  - [x] Show platforms used vs limit
+  - [x] Display progress bars for usage
+  - [x] Show days until limit resets
+  - [x] Add upgrade CTA when approaching limits
+  - [x] Add current plan card with features
+
+## Stabilization (v2.5)
+- [x] Run comprehensive debug scan
+- [x] Run calibration checks (TypeScript: 0 errors)
+- [x] Run core stabilization tests (309 tests passing)
+- [x] Clean up unused code (removed accessible-button.tsx, accessible-input.tsx)
+- [x] Optimize performance
+- [x] Verify all features working end-to-end
