@@ -695,3 +695,263 @@ export async function updateCampaignAggregates(campaignId: number, userId: numbe
     bestPlatform: analytics.bestPlatform,
   });
 }
+
+
+// ============ SUBSCRIPTIONS ============
+
+import {
+  subscriptionPlans,
+  userSubscriptions,
+  paymentHistory,
+  InsertSubscriptionPlan,
+  InsertUserSubscription,
+  InsertPaymentHistory,
+} from "../drizzle/schema";
+
+// Subscription Plans
+export async function getAllPlans() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(subscriptionPlans)
+    .where(eq(subscriptionPlans.isActive, true))
+    .orderBy(subscriptionPlans.sortOrder);
+}
+
+export async function getPlanByName(name: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(subscriptionPlans)
+    .where(eq(subscriptionPlans.name, name));
+  return result[0] || null;
+}
+
+export async function getPlanById(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(subscriptionPlans)
+    .where(eq(subscriptionPlans.id, id));
+  return result[0] || null;
+}
+
+export async function createPlan(data: InsertSubscriptionPlan) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(subscriptionPlans).values(data);
+  return result[0].insertId;
+}
+
+export async function updatePlan(id: number, data: Partial<InsertSubscriptionPlan>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(subscriptionPlans).set(data)
+    .where(eq(subscriptionPlans.id, id));
+}
+
+export async function upsertPlan(data: InsertSubscriptionPlan) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const existing = await getPlanByName(data.name);
+  if (existing) {
+    await updatePlan(existing.id, data);
+    return existing.id;
+  }
+  return createPlan(data);
+}
+
+// User Subscriptions
+export async function getUserSubscription(userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(userSubscriptions)
+    .where(eq(userSubscriptions.userId, userId));
+  return result[0] || null;
+}
+
+export async function getUserSubscriptionWithPlan(userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const subscription = await getUserSubscription(userId);
+  if (!subscription) {
+    // Return free plan by default
+    const freePlan = await getPlanByName("free");
+    return {
+      subscription: null,
+      plan: freePlan,
+    };
+  }
+  
+  const plan = await getPlanById(subscription.planId);
+  return { subscription, plan };
+}
+
+export async function createUserSubscription(data: InsertUserSubscription) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(userSubscriptions).values(data);
+  return result[0].insertId;
+}
+
+export async function updateUserSubscription(userId: number, data: Partial<InsertUserSubscription>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(userSubscriptions).set(data)
+    .where(eq(userSubscriptions.userId, userId));
+}
+
+export async function upsertUserSubscription(userId: number, data: Omit<InsertUserSubscription, "userId">) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const existing = await getUserSubscription(userId);
+  if (existing) {
+    await updateUserSubscription(userId, data);
+    return existing.id;
+  }
+  return createUserSubscription({ ...data, userId });
+}
+
+export async function incrementPostCount(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const subscription = await getUserSubscription(userId);
+  if (!subscription) return;
+  
+  // Check if we need to reset the week counter
+  const now = new Date();
+  const weekStart = subscription.weekStartDate;
+  const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  
+  if (!weekStart || weekStart < oneWeekAgo) {
+    // Reset counter for new week
+    await updateUserSubscription(userId, {
+      postsThisWeek: 1,
+      weekStartDate: now,
+    });
+  } else {
+    // Increment counter
+    await updateUserSubscription(userId, {
+      postsThisWeek: subscription.postsThisWeek + 1,
+    });
+  }
+}
+
+export async function canUserPost(userId: number): Promise<{ canPost: boolean; reason?: string; limit?: number; used?: number }> {
+  const subData = await getUserSubscriptionWithPlan(userId);
+  if (!subData || !subData.plan) {
+    return { canPost: true }; // Allow if no plan data (fallback)
+  }
+  
+  const { subscription, plan } = subData;
+  
+  // Unlimited posts
+  if (plan.maxPostsPerWeek === -1) {
+    return { canPost: true };
+  }
+  
+  // Check weekly limit
+  const postsThisWeek = subscription?.postsThisWeek || 0;
+  const weekStart = subscription?.weekStartDate;
+  const now = new Date();
+  const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  
+  // If week has reset, user can post
+  if (!weekStart || weekStart < oneWeekAgo) {
+    return { canPost: true, limit: plan.maxPostsPerWeek, used: 0 };
+  }
+  
+  if (postsThisWeek >= plan.maxPostsPerWeek) {
+    return {
+      canPost: false,
+      reason: `You've reached your weekly limit of ${plan.maxPostsPerWeek} posts. Upgrade to post more!`,
+      limit: plan.maxPostsPerWeek,
+      used: postsThisWeek,
+    };
+  }
+  
+  return { canPost: true, limit: plan.maxPostsPerWeek, used: postsThisWeek };
+}
+
+export async function canUserUsePlatform(userId: number, platformCount: number): Promise<{ canUse: boolean; reason?: string; limit?: number }> {
+  const subData = await getUserSubscriptionWithPlan(userId);
+  if (!subData || !subData.plan) {
+    return { canUse: true };
+  }
+  
+  const { plan } = subData;
+  
+  if (platformCount > plan.maxPlatforms) {
+    return {
+      canUse: false,
+      reason: `Your plan allows ${plan.maxPlatforms} platform(s). Upgrade to use more!`,
+      limit: plan.maxPlatforms,
+    };
+  }
+  
+  return { canUse: true, limit: plan.maxPlatforms };
+}
+
+export async function hasFeature(userId: number, feature: string): Promise<boolean> {
+  const subData = await getUserSubscriptionWithPlan(userId);
+  if (!subData || !subData.plan) {
+    return false;
+  }
+  
+  const { plan } = subData;
+  const featureKey = feature as keyof typeof plan;
+  
+  if (featureKey in plan) {
+    return Boolean(plan[featureKey]);
+  }
+  
+  return false;
+}
+
+// Payment History
+export async function getUserPaymentHistory(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(paymentHistory)
+    .where(eq(paymentHistory.userId, userId))
+    .orderBy(desc(paymentHistory.createdAt));
+}
+
+export async function createPaymentRecord(data: InsertPaymentHistory) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(paymentHistory).values(data);
+  return result[0].insertId;
+}
+
+// Initialize default plans
+export async function initializeSubscriptionPlans() {
+  const { SUBSCRIPTION_TIERS } = await import("./stripe");
+  
+  const plans = [
+    { ...SUBSCRIPTION_TIERS.free, sortOrder: 0 },
+    { ...SUBSCRIPTION_TIERS.basic, sortOrder: 1 },
+    { ...SUBSCRIPTION_TIERS.pro, sortOrder: 2 },
+    { ...SUBSCRIPTION_TIERS.vibe, sortOrder: 3 },
+  ];
+  
+  for (const tier of plans) {
+    await upsertPlan({
+      name: tier.name,
+      displayName: tier.displayName,
+      description: tier.description,
+      priceMonthly: tier.priceMonthly,
+      priceYearly: tier.priceYearly,
+      maxPlatforms: tier.maxPlatforms,
+      maxPostsPerWeek: tier.maxPostsPerWeek,
+      maxTeamMembers: tier.maxTeamMembers,
+      analyticsRetentionDays: tier.analyticsRetentionDays,
+      ...tier.features,
+      sortOrder: tier.sortOrder,
+      isActive: true,
+    });
+  }
+  
+  console.log("[Database] Subscription plans initialized");
+}

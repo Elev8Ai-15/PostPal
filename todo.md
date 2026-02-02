@@ -154,3 +154,18 @@
 - [x] Clean up broken/unused code
 - [x] Remove unused components (hello-wave, parallax-scroll-view, external-link)
 - [x] Optimize performance
+
+## Subscription Tiers & Stripe Integration (v2.4)
+- [x] Integrate Stripe API for payment processing
+- [x] Create subscription tiers database schema (subscriptions, subscriptionPlans tables)
+- [x] Implement Free tier: 1 platform, 2 posts/week, AI content, hashtags, calendar
+- [x] Implement Basic tier ($4.99): 3 platforms, 15 posts/week, inbox, templates
+- [x] Implement Pro tier ($9.99): All 7 platforms, 50 posts/week, video, analytics, strategy
+- [x] Implement Vibe tier ($19.99): Unlimited posts, 3 team members, API access, priority support
+- [x] Create subscription management UI (subscription.tsx)
+- [x] Add feature gating based on subscription tier (use-subscription.ts hook)
+- [x] Create upgrade prompts for locked features (FeatureGate component)
+- [x] Add platform limit enforcement in content creation
+- [x] Add post limit enforcement with weekly tracking
+- [x] Create subscription tests (21 tests passing)
+- [x] Analyze tier coverage and provide improvement suggestions

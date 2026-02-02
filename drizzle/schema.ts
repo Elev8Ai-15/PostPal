@@ -269,3 +269,90 @@ export const campaignPosts = mysqlTable("campaign_posts", {
 
 export type CampaignPost = typeof campaignPosts.$inferSelect;
 export type InsertCampaignPost = typeof campaignPosts.$inferInsert;
+
+
+/**
+ * Subscription plans - Define available tiers
+ */
+export const subscriptionPlans = mysqlTable("subscription_plans", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 50 }).notNull().unique(), // free, basic, pro, vibe
+  displayName: varchar("displayName", { length: 100 }).notNull(),
+  description: text("description"),
+  priceMonthly: int("priceMonthly").notNull(), // in cents (499 = $4.99)
+  priceYearly: int("priceYearly").notNull(), // in cents
+  stripePriceIdMonthly: varchar("stripePriceIdMonthly", { length: 255 }),
+  stripePriceIdYearly: varchar("stripePriceIdYearly", { length: 255 }),
+  stripeProductId: varchar("stripeProductId", { length: 255 }),
+  // Limits
+  maxPlatforms: int("maxPlatforms").notNull(),
+  maxPostsPerWeek: int("maxPostsPerWeek").notNull(), // -1 for unlimited
+  maxTeamMembers: int("maxTeamMembers").default(1).notNull(),
+  analyticsRetentionDays: int("analyticsRetentionDays").default(7).notNull(),
+  // Feature flags
+  hasRecurringTemplates: boolean("hasRecurringTemplates").default(false).notNull(),
+  hasUnifiedInbox: boolean("hasUnifiedInbox").default(false).notNull(),
+  hasSavedReplies: boolean("hasSavedReplies").default(false).notNull(),
+  hasAutoResponders: boolean("hasAutoResponders").default(false).notNull(),
+  hasAiReplySuggestions: boolean("hasAiReplySuggestions").default(false).notNull(),
+  hasVideoContent: boolean("hasVideoContent").default(false).notNull(),
+  hasCampaignAnalytics: boolean("hasCampaignAnalytics").default(false).notNull(),
+  hasAiStrategy: boolean("hasAiStrategy").default(false).notNull(),
+  hasSubredditTargeting: boolean("hasSubredditTargeting").default(false).notNull(),
+  hasExportReports: boolean("hasExportReports").default(false).notNull(),
+  hasPrioritySupport: boolean("hasPrioritySupport").default(false).notNull(),
+  hasApiAccess: boolean("hasApiAccess").default(false).notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
+  sortOrder: int("sortOrder").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type SubscriptionPlan = typeof subscriptionPlans.$inferSelect;
+export type InsertSubscriptionPlan = typeof subscriptionPlans.$inferInsert;
+
+/**
+ * User subscriptions - Track user's current subscription
+ */
+export const userSubscriptions = mysqlTable("user_subscriptions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().unique(),
+  planId: int("planId").notNull(),
+  status: mysqlEnum("status", ["active", "canceled", "past_due", "trialing", "paused"]).default("active").notNull(),
+  billingCycle: mysqlEnum("billingCycle", ["monthly", "yearly"]).default("monthly").notNull(),
+  // Stripe data
+  stripeCustomerId: varchar("stripeCustomerId", { length: 255 }),
+  stripeSubscriptionId: varchar("stripeSubscriptionId", { length: 255 }),
+  // Dates
+  currentPeriodStart: timestamp("currentPeriodStart"),
+  currentPeriodEnd: timestamp("currentPeriodEnd"),
+  cancelAtPeriodEnd: boolean("cancelAtPeriodEnd").default(false).notNull(),
+  canceledAt: timestamp("canceledAt"),
+  // Usage tracking
+  postsThisWeek: int("postsThisWeek").default(0).notNull(),
+  weekStartDate: timestamp("weekStartDate"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type UserSubscription = typeof userSubscriptions.$inferSelect;
+export type InsertUserSubscription = typeof userSubscriptions.$inferInsert;
+
+/**
+ * Payment history - Track all payments
+ */
+export const paymentHistory = mysqlTable("payment_history", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  subscriptionId: int("subscriptionId"),
+  stripePaymentIntentId: varchar("stripePaymentIntentId", { length: 255 }),
+  stripeInvoiceId: varchar("stripeInvoiceId", { length: 255 }),
+  amount: int("amount").notNull(), // in cents
+  currency: varchar("currency", { length: 3 }).default("usd").notNull(),
+  status: mysqlEnum("status", ["succeeded", "pending", "failed", "refunded"]).notNull(),
+  description: text("description"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type PaymentHistory = typeof paymentHistory.$inferSelect;
+export type InsertPaymentHistory = typeof paymentHistory.$inferInsert;

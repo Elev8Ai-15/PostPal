@@ -73,6 +73,10 @@ const MAPPING: Record<string, MaterialIconName> = {
   "chevron.up": "expand-less",
   "chevron.down": "expand-more",
   "eye.slash": "visibility-off",
+  "xmark.circle": "cancel",
+  "crown.fill": "workspace-premium",
+  "creditcard": "credit-card",
+  "arrow.clockwise": "refresh",
 };
 
 type IconSymbolName = keyof typeof MAPPING;

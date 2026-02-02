@@ -214,6 +214,16 @@ export default function SettingsScreen() {
           />
         </SettingSection>
 
+        {/* Subscription */}
+        <SettingSection title="Subscription">
+          <SettingItem
+            icon="crown.fill"
+            title="Manage Subscription"
+            subtitle="View plans and billing"
+            onPress={() => router.push("/subscription")}
+          />
+        </SettingSection>
+
         {/* Connected Accounts */}
         <SettingSection title="Connected Accounts">
           <SettingItem

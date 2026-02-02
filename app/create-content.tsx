@@ -5,6 +5,7 @@ import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
 import { useAuth } from "@/hooks/use-auth";
+import { useSubscription } from "@/hooks/use-subscription";
 import { trpc } from "@/lib/trpc";
 import { HashtagSuggestions } from "@/components/hashtag-suggestions";
 import { PlatformPreview } from "@/components/platform-preview";
@@ -77,6 +78,7 @@ export default function CreateContentScreen() {
   const colors = useColors();
   const router = useRouter();
   const { isAuthenticated } = useAuth();
+  const { limits, canPost, postLimitReason, canUsePlatforms, hasFeature } = useSubscription();
   
   const [contentType, setContentType] = useState<ContentType>("social");
   const [selectedPlatforms, setSelectedPlatforms] = useState<SocialPlatform[]>(["instagram"]);
@@ -117,6 +119,18 @@ export default function CreateContentScreen() {
         if (prev.length === 1) return prev;
         return prev.filter(p => p !== platformId);
       } else {
+        // Check subscription limit
+        if (!canUsePlatforms(prev.length + 1)) {
+          Alert.alert(
+            "Platform Limit Reached",
+            `Your plan allows ${limits.maxPlatforms} platform(s). Upgrade to use more!`,
+            [
+              { text: "Cancel", style: "cancel" },
+              { text: "Upgrade", onPress: () => router.push("/subscription") },
+            ]
+          );
+          return prev;
+        }
         return [...prev, platformId];
       }
     });
@@ -125,12 +139,24 @@ export default function CreateContentScreen() {
   const handleSelectAllPlatforms = () => {
     triggerHaptic();
     const availablePlatforms = getAvailablePlatforms();
-    if (selectedPlatforms.length === availablePlatforms.length) {
-      // If all selected, select only the first one
+    if (selectedPlatforms.length === availablePlatforms.length || selectedPlatforms.length >= limits.maxPlatforms) {
+      // If all selected or at limit, select only the first one
       setSelectedPlatforms([availablePlatforms[0].id]);
     } else {
-      // Select all
-      setSelectedPlatforms(availablePlatforms.map(p => p.id));
+      // Select up to the subscription limit
+      const maxToSelect = Math.min(availablePlatforms.length, limits.maxPlatforms);
+      setSelectedPlatforms(availablePlatforms.slice(0, maxToSelect).map(p => p.id));
+      
+      if (availablePlatforms.length > limits.maxPlatforms) {
+        Alert.alert(
+          "Platform Limit",
+          `Your plan allows ${limits.maxPlatforms} platform(s). Upgrade for more!`,
+          [
+            { text: "OK" },
+            { text: "Upgrade", onPress: () => router.push("/subscription") },
+          ]
+        );
+      }
     }
   };
 
@@ -267,6 +293,19 @@ export default function CreateContentScreen() {
       return;
     }
 
+    // Check post limit
+    if (!canPost) {
+      Alert.alert(
+        "Post Limit Reached",
+        postLimitReason || "You've reached your weekly post limit. Upgrade to post more!",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Upgrade", onPress: () => router.push("/subscription") },
+        ]
+      );
+      return;
+    }
+
     triggerHaptic();
     setIsSaving(true);
 
@@ -300,6 +339,19 @@ export default function CreateContentScreen() {
 
     if (!isAuthenticated) {
       Alert.alert("Sign In Required", "Please sign in to post content.");
+      return;
+    }
+
+    // Check post limit
+    if (!canPost) {
+      Alert.alert(
+        "Post Limit Reached",
+        postLimitReason || "You've reached your weekly post limit. Upgrade to post more!",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Upgrade", onPress: () => router.push("/subscription") },
+        ]
+      );
       return;
     }
 

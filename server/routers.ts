@@ -7,6 +7,7 @@ import { invokeLLM } from "./_core/llm";
 import { notifyOwner } from "./_core/notification";
 import * as db from "./db";
 import * as socialIntegration from "./social-integration";
+import * as stripeService from "./stripe";
 
 // Helper to calculate next scheduled date for recurring templates
 function calculateNextScheduledDate(
@@ -1141,6 +1142,185 @@ ${input.currentChallenges ? `Current Challenges: ${input.currentChallenges}` : "
       .query(({ input }) => {
         return socialIntegration.getPlatformGuidelines(input.platform);
       }),
+  }),
+
+  // Subscription Management
+  subscription: router({
+    // Get all available plans
+    plans: publicProcedure.query(async () => {
+      const plans = await db.getAllPlans();
+      if (plans.length === 0) {
+        // Initialize plans if not exists
+        await db.initializeSubscriptionPlans();
+        return db.getAllPlans();
+      }
+      return plans;
+    }),
+
+    // Get current user's subscription
+    current: protectedProcedure.query(async ({ ctx }) => {
+      const subData = await db.getUserSubscriptionWithPlan(ctx.user.id);
+      return subData;
+    }),
+
+    // Check if user can post (based on limits)
+    canPost: protectedProcedure.query(async ({ ctx }) => {
+      return db.canUserPost(ctx.user.id);
+    }),
+
+    // Check if user can use platforms
+    canUsePlatforms: protectedProcedure
+      .input(z.object({ platformCount: z.number() }))
+      .query(async ({ ctx, input }) => {
+        return db.canUserUsePlatform(ctx.user.id, input.platformCount);
+      }),
+
+    // Check if user has a specific feature
+    hasFeature: protectedProcedure
+      .input(z.object({ feature: z.string() }))
+      .query(async ({ ctx, input }) => {
+        return db.hasFeature(ctx.user.id, input.feature);
+      }),
+
+    // Create checkout session for subscription
+    createCheckout: protectedProcedure
+      .input(z.object({
+        planName: z.enum(["basic", "pro", "vibe"]),
+        billingCycle: z.enum(["monthly", "yearly"]),
+        successUrl: z.string(),
+        cancelUrl: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!stripeService.stripe) {
+          throw new Error("Stripe not configured");
+        }
+
+        const plan = await db.getPlanByName(input.planName);
+        if (!plan) {
+          throw new Error("Plan not found");
+        }
+
+        const priceId = input.billingCycle === "monthly" 
+          ? plan.stripePriceIdMonthly 
+          : plan.stripePriceIdYearly;
+
+        if (!priceId) {
+          throw new Error("Price not configured for this plan");
+        }
+
+        // Get or create Stripe customer
+        const customer = await stripeService.getOrCreateCustomer({
+          email: ctx.user.email || `user-${ctx.user.id}@postpal.app`,
+          name: ctx.user.name || undefined,
+          userId: ctx.user.id,
+        });
+
+        // Create checkout session
+        const session = await stripeService.createCheckoutSession({
+          customerId: customer.id,
+          priceId,
+          successUrl: input.successUrl,
+          cancelUrl: input.cancelUrl,
+          metadata: {
+            userId: ctx.user.id.toString(),
+            planName: input.planName,
+            billingCycle: input.billingCycle,
+          },
+        });
+
+        return { checkoutUrl: session.url };
+      }),
+
+    // Create customer portal session
+    createPortal: protectedProcedure
+      .input(z.object({ returnUrl: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        if (!stripeService.stripe) {
+          throw new Error("Stripe not configured");
+        }
+
+        const subscription = await db.getUserSubscription(ctx.user.id);
+        if (!subscription?.stripeCustomerId) {
+          throw new Error("No active subscription found");
+        }
+
+        const session = await stripeService.createPortalSession(
+          subscription.stripeCustomerId,
+          input.returnUrl
+        );
+
+        return { portalUrl: session.url };
+      }),
+
+    // Cancel subscription
+    cancel: protectedProcedure
+      .input(z.object({ immediately: z.boolean().optional() }))
+      .mutation(async ({ ctx, input }) => {
+        const subscription = await db.getUserSubscription(ctx.user.id);
+        if (!subscription?.stripeSubscriptionId) {
+          throw new Error("No active subscription found");
+        }
+
+        await stripeService.cancelSubscription(
+          subscription.stripeSubscriptionId,
+          input.immediately
+        );
+
+        await db.updateUserSubscription(ctx.user.id, {
+          cancelAtPeriodEnd: !input.immediately,
+          canceledAt: input.immediately ? new Date() : undefined,
+          status: input.immediately ? "canceled" : "active",
+        });
+
+        return { success: true };
+      }),
+
+    // Resume canceled subscription
+    resume: protectedProcedure.mutation(async ({ ctx }) => {
+      const subscription = await db.getUserSubscription(ctx.user.id);
+      if (!subscription?.stripeSubscriptionId) {
+        throw new Error("No subscription found");
+      }
+
+      await stripeService.resumeSubscription(subscription.stripeSubscriptionId);
+
+      await db.updateUserSubscription(ctx.user.id, {
+        cancelAtPeriodEnd: false,
+        canceledAt: null,
+      });
+
+      return { success: true };
+    }),
+
+    // Get payment history
+    paymentHistory: protectedProcedure.query(async ({ ctx }) => {
+      return db.getUserPaymentHistory(ctx.user.id);
+    }),
+
+    // Initialize Stripe products (admin only)
+    initializeStripeProducts: protectedProcedure.mutation(async ({ ctx }) => {
+      if (ctx.user.role !== "admin") {
+        throw new Error("Admin access required");
+      }
+
+      const products = await stripeService.createStripeProducts();
+      
+      // Update plans with Stripe IDs
+      for (const [tierName, data] of Object.entries(products)) {
+        if (tierName === "free") continue;
+        
+        await db.updatePlan(
+          (await db.getPlanByName(tierName))!.id,
+          {
+            stripeProductId: data.productId,
+            stripePriceIdMonthly: data.monthlyPriceId,
+            stripePriceIdYearly: data.yearlyPriceId,
+          }
+        );
+      }
+
+      return { success: true, products };
+    }),
   }),
 });
 
