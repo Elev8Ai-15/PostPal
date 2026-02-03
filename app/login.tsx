@@ -91,16 +91,21 @@ export default function LoginScreen() {
           )}
         </TouchableOpacity>
 
-        {/* Skip for now (demo mode) */}
+        {/* Guest Mode - Prominent Button */}
         <TouchableOpacity
-          className="mt-4 py-3 items-center"
+          className="mt-4 bg-surface border-2 border-primary rounded-xl py-4 items-center flex-row justify-center"
           onPress={() => router.replace("/(tabs)")}
-          activeOpacity={0.7}
+          activeOpacity={0.8}
         >
-          <Text className="text-base text-muted">
-            Continue without signing in
+          <IconSymbol name="sparkles" size={20} color={colors.primary} />
+          <Text className="text-lg font-semibold text-primary ml-2">
+            Try PostPal Free
           </Text>
         </TouchableOpacity>
+        
+        <Text className="text-sm text-muted text-center mt-2">
+          No account needed • Full app access • Data saved locally
+        </Text>
 
         {/* Terms */}
         <Text className="text-xs text-muted text-center mt-8">

@@ -202,3 +202,11 @@
 - [x] Clean up unused code (removed accessible-button.tsx, accessible-input.tsx)
 - [x] Optimize performance
 - [x] Verify all features working end-to-end
+
+## Shareable App Fix (v2.6)
+- [x] Add prominent Guest Mode button on login screen ("Try PostPal Free")
+- [x] Make app fully usable without authentication
+- [x] Store guest data locally with AsyncStorage
+- [x] Remove OAuth requirement for AI content generation
+- [x] Add "Save Locally" option for guest users
+- [x] Test shareable experience end-to-end

@@ -12,6 +12,7 @@ import { PlatformPreview } from "@/components/platform-preview";
 import { SubredditSuggestions } from "@/components/subreddit-suggestions";
 import * as Haptics from "expo-haptics";
 import { Platform } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 type ContentType = "social" | "blog" | "newsletter" | "video";
 type SocialPlatform = "instagram" | "twitter" | "linkedin" | "facebook" | "youtube" | "tiktok" | "reddit" | "email" | "blog";
@@ -190,17 +191,8 @@ export default function CreateContentScreen() {
       return;
     }
 
-    if (!isAuthenticated) {
-      Alert.alert(
-        "Sign In Required",
-        "Please sign in to use AI content generation.",
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Sign In", onPress: () => router.push("/login") },
-        ]
-      );
-      return;
-    }
+    // Guest users can generate content - it's saved locally
+    // Authentication only required for cloud sync features
 
     triggerHaptic();
     setIsGenerating(true);
@@ -285,11 +277,55 @@ export default function CreateContentScreen() {
     return content + hashtagString;
   };
 
+  // Save content locally for guest users
+  const saveLocally = async () => {
+    if (!generatedContent) return;
+    
+    try {
+      // Get existing local drafts
+      const existingDrafts = await AsyncStorage.getItem("postpal_local_drafts");
+      const drafts = existingDrafts ? JSON.parse(existingDrafts) : [];
+      
+      // Add new drafts for each platform
+      for (const platformId of selectedPlatforms) {
+        const newDraft = {
+          id: `local_${Date.now()}_${platformId}`,
+          title: generatedContent.title,
+          content: getFullContent(platformId),
+          contentType,
+          platform: platformId,
+          createdAt: new Date().toISOString(),
+          aiGenerated: true,
+        };
+        drafts.push(newDraft);
+      }
+      
+      await AsyncStorage.setItem("postpal_local_drafts", JSON.stringify(drafts));
+      
+      const platformCount = selectedPlatforms.length;
+      Alert.alert(
+        "Saved Locally!",
+        `Your content has been saved to this device (${platformCount} draft${platformCount > 1 ? "s" : ""}). Sign in anytime to sync to cloud.`,
+        [{ text: "OK", onPress: () => router.back() }]
+      );
+    } catch (error) {
+      Alert.alert("Error", "Failed to save locally. Please try again.");
+    }
+  };
+
   const handleSaveAsDraft = async () => {
     if (!generatedContent) return;
 
+    // For guest users, show option to save locally or sign in
     if (!isAuthenticated) {
-      Alert.alert("Sign In Required", "Please sign in to save content.");
+      Alert.alert(
+        "Save Options",
+        "Sign in to save to cloud, or continue as guest to save locally on this device.",
+        [
+          { text: "Continue as Guest", onPress: () => saveLocally() },
+          { text: "Sign In", onPress: () => router.push("/login") },
+        ]
+      );
       return;
     }
 
@@ -337,8 +373,16 @@ export default function CreateContentScreen() {
   const handlePostToAllPlatforms = async () => {
     if (!generatedContent) return;
 
+    // For guest users, save locally instead
     if (!isAuthenticated) {
-      Alert.alert("Sign In Required", "Please sign in to post content.");
+      Alert.alert(
+        "Create Campaign",
+        "Sign in to schedule posts to your connected accounts, or save locally for now.",
+        [
+          { text: "Save Locally", onPress: () => saveLocally() },
+          { text: "Sign In", onPress: () => router.push("/login") },
+        ]
+      );
       return;
     }
 
