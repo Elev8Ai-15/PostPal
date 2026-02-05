@@ -250,3 +250,11 @@
 - [x] Add: Expandable content view for long articles (tap to expand/collapse)
 - [x] Add: Pass generated content to calendar when scheduling (via route params)
 - [x] Test content-to-calendar flow end-to-end (361 tests passing)
+
+## Critical UI/UX Fixes (v2.8.2) - Content Creation Flow
+- [x] BUG: Content preview now shows full content with character count
+- [x] BUG: Added Edit Content button to modify generated content before posting
+- [x] BUG: Request Revision now opens full Edit Modal with text input
+- [x] BUG: Full Preview modal shows complete content instead of truncated alert
+- [x] Added success alert after content generation
+- [x] Comprehensive UI/UX audit completed

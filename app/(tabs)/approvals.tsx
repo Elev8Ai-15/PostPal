@@ -1,4 +1,4 @@
-import { ScrollView, Text, View, TouchableOpacity, StyleSheet, Alert } from "react-native";
+import { ScrollView, Text, View, TouchableOpacity, StyleSheet, Alert, Modal, TextInput, KeyboardAvoidingView } from "react-native";
 import { useState } from "react";
 import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
@@ -170,6 +170,10 @@ function ApprovalCard({ item, onApprove, onRevise, onPreview }: ApprovalCardProp
 export default function ApprovalsScreen() {
   const colors = useColors();
   const [pendingContent, setPendingContent] = useState(initialPendingContent);
+  const [editingItem, setEditingItem] = useState<ContentItem | null>(null);
+  const [editedText, setEditedText] = useState("");
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showFullPreview, setShowFullPreview] = useState<ContentItem | null>(null);
 
   const triggerHaptic = () => {
     if (Platform.OS !== "web") {
@@ -185,26 +189,33 @@ export default function ApprovalsScreen() {
     }
   };
 
-  const handleRevise = (id: string) => {
+  const handleRevise = (item: ContentItem) => {
     triggerHaptic();
-    Alert.alert(
-      "Request Revision",
-      "What changes would you like to make?",
-      [
-        { text: "Cancel", style: "cancel" },
-        { 
-          text: "Submit", 
-          onPress: () => {
-            setPendingContent(prev => prev.filter(item => item.id !== id));
-          }
-        },
-      ]
+    setEditingItem(item);
+    setEditedText(item.preview);
+    setShowEditModal(true);
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingItem) return;
+    triggerHaptic();
+    setPendingContent(prev => 
+      prev.map(item => 
+        item.id === editingItem.id 
+          ? { ...item, preview: editedText }
+          : item
+      )
     );
+    setShowEditModal(false);
+    setEditingItem(null);
+    if (Platform.OS !== "web") {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
   };
 
   const handlePreview = (item: ContentItem) => {
     triggerHaptic();
-    Alert.alert(item.title, item.preview);
+    setShowFullPreview(item);
   };
 
   const handleApproveAll = () => {
@@ -263,7 +274,7 @@ export default function ApprovalsScreen() {
                 key={item.id}
                 item={item}
                 onApprove={() => handleApprove(item.id)}
-                onRevise={() => handleRevise(item.id)}
+                onRevise={() => handleRevise(item)}
                 onPreview={() => handlePreview(item)}
               />
             ))
@@ -280,6 +291,128 @@ export default function ApprovalsScreen() {
           )}
         </View>
       </ScrollView>
+
+      {/* Edit Content Modal */}
+      <Modal
+        visible={showEditModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowEditModal(false)}
+      >
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          className="flex-1"
+        >
+          <View className="flex-1 bg-black/50 justify-end">
+            <View className="bg-background rounded-t-3xl max-h-[90%]">
+              {/* Modal Header */}
+              <View className="flex-row items-center justify-between p-4 border-b border-border">
+                <TouchableOpacity onPress={() => setShowEditModal(false)}>
+                  <Text className="text-base text-muted">Cancel</Text>
+                </TouchableOpacity>
+                <Text className="text-lg font-semibold text-foreground">Edit Content</Text>
+                <TouchableOpacity onPress={handleSaveEdit}>
+                  <Text className="text-base font-semibold text-primary">Save</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Edit Title */}
+              {editingItem && (
+                <View className="p-4">
+                  <Text className="text-sm font-medium text-foreground mb-2">
+                    {editingItem.title}
+                  </Text>
+                  <View className="flex-row items-center mb-4">
+                    <View 
+                      className="rounded-full px-2.5 py-1 flex-row items-center mr-2"
+                      style={{ backgroundColor: `${getTypeColor(editingItem.type, colors)}20` }}
+                    >
+                      <IconSymbol name={getTypeIcon(editingItem.type) as any} size={14} color={getTypeColor(editingItem.type, colors)} />
+                      <Text className="text-xs font-medium ml-1" style={{ color: getTypeColor(editingItem.type, colors) }}>
+                        {getTypeLabel(editingItem.type)}
+                      </Text>
+                    </View>
+                    {editingItem.platform && (
+                      <Text className="text-xs text-muted">{editingItem.platform}</Text>
+                    )}
+                  </View>
+                </View>
+              )}
+
+              {/* Edit Text Area */}
+              <View className="px-4 pb-8">
+                <Text className="text-sm font-medium text-foreground mb-2">Content</Text>
+                <TextInput
+                  className="bg-surface border border-border rounded-xl p-4"
+                  value={editedText}
+                  onChangeText={setEditedText}
+                  multiline
+                  style={{ minHeight: 200, textAlignVertical: "top", color: colors.foreground }}
+                  placeholder="Edit your content..."
+                  placeholderTextColor={colors.muted}
+                />
+                <Text className="text-xs text-muted mt-2">
+                  {editedText.length} characters
+                </Text>
+              </View>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Full Preview Modal */}
+      <Modal
+        visible={showFullPreview !== null}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowFullPreview(null)}
+      >
+        <View className="flex-1 bg-black/50 justify-end">
+          <View className="bg-background rounded-t-3xl max-h-[80%]">
+            {/* Modal Header */}
+            <View className="flex-row items-center justify-between p-4 border-b border-border">
+              <View className="w-16" />
+              <Text className="text-lg font-semibold text-foreground">Full Preview</Text>
+              <TouchableOpacity onPress={() => setShowFullPreview(null)} className="w-16 items-end">
+                <Text className="text-base text-primary">Done</Text>
+              </TouchableOpacity>
+            </View>
+
+            {showFullPreview && (
+              <ScrollView className="p-4">
+                <Text className="text-lg font-bold text-foreground mb-2">
+                  {showFullPreview.title}
+                </Text>
+                <View className="flex-row items-center mb-4">
+                  <View 
+                    className="rounded-full px-2.5 py-1 flex-row items-center mr-2"
+                    style={{ backgroundColor: `${getTypeColor(showFullPreview.type, colors)}20` }}
+                  >
+                    <IconSymbol name={getTypeIcon(showFullPreview.type) as any} size={14} color={getTypeColor(showFullPreview.type, colors)} />
+                    <Text className="text-xs font-medium ml-1" style={{ color: getTypeColor(showFullPreview.type, colors) }}>
+                      {getTypeLabel(showFullPreview.type)}
+                    </Text>
+                  </View>
+                  {showFullPreview.platform && (
+                    <Text className="text-xs text-muted">{showFullPreview.platform}</Text>
+                  )}
+                </View>
+                <View className="bg-surface rounded-xl p-4 border border-border">
+                  <Text className="text-sm text-foreground leading-relaxed">
+                    {showFullPreview.preview}
+                  </Text>
+                </View>
+                <View className="flex-row items-center mt-4 mb-8">
+                  <IconSymbol name="clock" size={14} color={colors.muted} />
+                  <Text className="text-xs text-muted ml-1">
+                    Scheduled for {showFullPreview.scheduledDate} at {showFullPreview.scheduledTime}
+                  </Text>
+                </View>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </ScreenContainer>
   );
 }

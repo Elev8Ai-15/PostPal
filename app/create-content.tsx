@@ -106,7 +106,9 @@ export default function CreateContentScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
   const [connectedPlatforms, setConnectedPlatforms] = useState<PostingSocialPlatform[]>([]);
-  const [isContentExpanded, setIsContentExpanded] = useState(false);
+  const [isContentExpanded, setIsContentExpanded] = useState(true); // Default expanded to show full content
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedContent, setEditedContent] = useState<string>("");
 
   // Load connected platforms on mount
   const loadConnectedPlatforms = async () => {
@@ -254,10 +256,18 @@ export default function CreateContentScreen() {
       }
       
       setPreviewPlatform(firstPlatform);
+      setIsEditing(false); // Reset editing state
       
       if (Platform.OS !== "web") {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
+      
+      // Show success message
+      Alert.alert(
+        "Content Generated!",
+        `Your ${selectedPlatforms.length > 1 ? selectedPlatforms.length + " platform-optimized versions have" : "content has"} been created. Scroll down to review, edit, and share.`,
+        [{ text: "Got it" }]
+      );
     } catch (error) {
       console.error("Generation error:", error);
       Alert.alert("Error", "Failed to generate content. Please try again.");
@@ -821,33 +831,71 @@ export default function CreateContentScreen() {
                   </View>
                 )}
                 
-                {/* Content with expand/collapse */}
-                <TouchableOpacity 
-                  onPress={() => {
-                    triggerHaptic();
-                    setIsContentExpanded(!isContentExpanded);
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <Text 
-                    className="text-sm text-foreground leading-relaxed"
-                    numberOfLines={isContentExpanded ? undefined : 6}
+                {/* Edit/View Toggle */}
+                <View className="flex-row items-center justify-between mb-3">
+                  <Text className="text-sm font-medium text-foreground">Generated Content</Text>
+                  <TouchableOpacity
+                    className="flex-row items-center px-3 py-1.5 rounded-full bg-primary/10"
+                    onPress={() => {
+                      triggerHaptic();
+                      if (!isEditing) {
+                        setEditedContent(getContentForPlatform(previewPlatform));
+                      }
+                      setIsEditing(!isEditing);
+                    }}
                   >
-                    {getContentForPlatform(previewPlatform)}
+                    <IconSymbol name={isEditing ? "checkmark" : "pencil"} size={14} color={colors.primary} />
+                    <Text className="text-xs font-medium text-primary ml-1">
+                      {isEditing ? "Done Editing" : "Edit Content"}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Full Content Display / Edit */}
+                {isEditing ? (
+                  <TextInput
+                    className="bg-background rounded-xl p-3 mb-3 text-sm"
+                    value={editedContent}
+                    onChangeText={(text) => {
+                      setEditedContent(text);
+                      // Update the platform version with edited content
+                      if (generatedContent?.platformVersions) {
+                        setGeneratedContent({
+                          ...generatedContent,
+                          platformVersions: {
+                            ...generatedContent.platformVersions,
+                            [previewPlatform]: {
+                              ...generatedContent.platformVersions[previewPlatform],
+                              content: text,
+                            },
+                          },
+                        });
+                      }
+                    }}
+                    multiline
+                    style={{ minHeight: 200, textAlignVertical: "top", color: colors.foreground }}
+                    placeholder="Edit your content here..."
+                    placeholderTextColor={colors.muted}
+                  />
+                ) : (
+                  <View className="bg-background rounded-xl p-3 mb-3">
+                    <Text className="text-sm text-foreground leading-relaxed">
+                      {getContentForPlatform(previewPlatform)}
+                    </Text>
+                  </View>
+                )}
+                
+                {/* Character Count */}
+                <View className="flex-row items-center justify-between mb-2">
+                  <Text className="text-xs text-muted">
+                    {getContentForPlatform(previewPlatform).length} characters
                   </Text>
-                  {getContentForPlatform(previewPlatform).length > 300 && (
-                    <View className="flex-row items-center justify-center mt-2 py-2">
-                      <Text className="text-xs text-primary font-medium">
-                        {isContentExpanded ? "Show Less" : "Read Full Content"}
-                      </Text>
-                      <IconSymbol 
-                        name={isContentExpanded ? "chevron.up" : "chevron.down"} 
-                        size={14} 
-                        color={colors.primary} 
-                      />
-                    </View>
+                  {PLATFORMS.find(p => p.id === previewPlatform)?.charLimit && (
+                    <Text className={`text-xs ${getContentForPlatform(previewPlatform).length > (PLATFORMS.find(p => p.id === previewPlatform)?.charLimit || 0) ? 'text-error' : 'text-muted'}`}>
+                      Limit: {PLATFORMS.find(p => p.id === previewPlatform)?.charLimit}
+                    </Text>
                   )}
-                </TouchableOpacity>
+                </View>
                 
                 {/* Hashtags (not for Reddit) */}
                 {previewPlatform !== "reddit" && getHashtagsForPlatform(previewPlatform).length > 0 && (
