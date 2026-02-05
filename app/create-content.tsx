@@ -1,5 +1,5 @@
 import { ScrollView, Text, View, TouchableOpacity, TextInput, StyleSheet, Alert, ActivityIndicator, KeyboardAvoidingView, Platform as RNPlatform } from "react-native";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
@@ -13,6 +13,7 @@ import { SubredditSuggestions } from "@/components/subreddit-suggestions";
 import * as Haptics from "expo-haptics";
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { postToMultiplePlatforms, getConnectedPlatforms, type SocialPlatform as PostingSocialPlatform } from "@/lib/social-posting";
 
 type ContentType = "social" | "blog" | "newsletter" | "video";
 type SocialPlatform = "instagram" | "twitter" | "linkedin" | "facebook" | "youtube" | "tiktok" | "reddit" | "email" | "blog";
@@ -102,6 +103,19 @@ export default function CreateContentScreen() {
   } | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isPosting, setIsPosting] = useState(false);
+  const [connectedPlatforms, setConnectedPlatforms] = useState<PostingSocialPlatform[]>([]);
+
+  // Load connected platforms on mount
+  const loadConnectedPlatforms = async () => {
+    const connected = await getConnectedPlatforms();
+    setConnectedPlatforms(connected);
+  };
+
+  // Check connected platforms when component mounts
+  useEffect(() => {
+    loadConnectedPlatforms();
+  }, []);
 
   const generateMutation = trpc.ai.generateContent.useMutation();
   const createPostMutation = trpc.posts.create.useMutation();
@@ -427,6 +441,84 @@ export default function CreateContentScreen() {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handlePostNow = async () => {
+    if (!generatedContent) return;
+
+    // Check which selected platforms are connected
+    const platformsToPost = selectedPlatforms.filter(p => 
+      connectedPlatforms.includes(p as PostingSocialPlatform)
+    ) as PostingSocialPlatform[];
+
+    if (platformsToPost.length === 0) {
+      Alert.alert(
+        "No Connected Accounts",
+        "Please connect your social accounts first to post directly.",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Connect Accounts", onPress: () => router.push("/social-accounts") },
+        ]
+      );
+      return;
+    }
+
+    // Show confirmation with platforms that will be posted to
+    const platformNames = platformsToPost.map(p => 
+      PLATFORMS.find(pl => pl.id === p)?.name || p
+    ).join(", ");
+
+    Alert.alert(
+      "Post Now",
+      `This will immediately post to: ${platformNames}\n\nAre you sure?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Post Now",
+          style: "default",
+          onPress: async () => {
+            triggerHaptic();
+            setIsPosting(true);
+
+            try {
+              const result = await postToMultiplePlatforms(
+                platformsToPost,
+                {
+                  text: generatedContent.content,
+                  title: generatedContent.title,
+                  hashtags: selectedHashtags,
+                  subreddit: targetSubreddits[0],
+                }
+              );
+
+              if (result.success) {
+                if (Platform.OS !== "web") {
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                }
+
+                const successPlatforms = result.results
+                  .filter(r => r.success)
+                  .map(r => PLATFORMS.find(p => p.id === r.platform)?.name || r.platform)
+                  .join(", ");
+
+                Alert.alert(
+                  "Posted!",
+                  `Successfully posted to: ${successPlatforms}${result.failureCount > 0 ? `\n\n${result.failureCount} platform(s) failed.` : ""}`,
+                  [{ text: "OK", onPress: () => router.back() }]
+                );
+              } else {
+                Alert.alert("Error", "Failed to post. Please try again.");
+              }
+            } catch (error) {
+              console.error("Post error:", error);
+              Alert.alert("Error", "Failed to post. Please try again.");
+            } finally {
+              setIsPosting(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleSendForApproval = async () => {
@@ -813,7 +905,7 @@ export default function CreateContentScreen() {
                   className="flex-1 mr-2 py-3 rounded-xl border border-border items-center"
                   onPress={handleSaveAsDraft}
                   activeOpacity={0.7}
-                  disabled={isSaving}
+                  disabled={isSaving || isPosting}
                 >
                   <Text className="font-medium text-foreground">Save as Draft</Text>
                 </TouchableOpacity>
@@ -821,7 +913,7 @@ export default function CreateContentScreen() {
                   className="flex-1 ml-2 py-3 rounded-xl bg-primary items-center"
                   onPress={handlePostToAllPlatforms}
                   activeOpacity={0.8}
-                  disabled={isSaving}
+                  disabled={isSaving || isPosting}
                 >
                   {isSaving ? (
                     <ActivityIndicator color={colors.background} size="small" />
@@ -832,6 +924,39 @@ export default function CreateContentScreen() {
                   )}
                 </TouchableOpacity>
               </View>
+
+              {/* Post Now Button */}
+              {connectedPlatforms.length > 0 && (
+                <TouchableOpacity
+                  className="mt-3 py-3 rounded-xl bg-success items-center flex-row justify-center"
+                  onPress={handlePostNow}
+                  activeOpacity={0.8}
+                  disabled={isSaving || isPosting}
+                >
+                  {isPosting ? (
+                    <ActivityIndicator color={colors.background} size="small" />
+                  ) : (
+                    <>
+                      <IconSymbol name="paperplane.fill" size={18} color={colors.background} />
+                      <Text className="font-semibold text-background ml-2">
+                        Post Now to {selectedPlatforms.filter(p => connectedPlatforms.includes(p as PostingSocialPlatform)).length} Platform{selectedPlatforms.filter(p => connectedPlatforms.includes(p as PostingSocialPlatform)).length !== 1 ? "s" : ""}
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
+
+              {/* Connect Accounts Prompt */}
+              {connectedPlatforms.length === 0 && (
+                <TouchableOpacity
+                  className="mt-3 py-3 rounded-xl border border-primary items-center flex-row justify-center"
+                  onPress={() => router.push("/social-accounts")}
+                  activeOpacity={0.7}
+                >
+                  <IconSymbol name="share" size={18} color={colors.primary} />
+                  <Text className="font-medium text-primary ml-2">Connect Accounts for One-Tap Posting</Text>
+                </TouchableOpacity>
+              )}
 
               {/* Send for Approval */}
               <TouchableOpacity

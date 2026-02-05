@@ -210,3 +210,29 @@
 - [x] Remove OAuth requirement for AI content generation
 - [x] Add "Save Locally" option for guest users
 - [x] Test shareable experience end-to-end
+
+## Social Account Manager (v2.7)
+- [x] Research best AI-powered social media integration solutions for 2026
+  - [x] Evaluated Outstand, Upload-Post, Ayrshare, Buffer API
+  - [x] Selected Upload-Post as primary (free tier, affordable, all platforms)
+  - [x] Created comprehensive research document
+- [x] Design and implement Social Account Manager UI
+  - [x] Enhanced social-accounts.tsx with all 10 platforms
+  - [x] Added platform connection status card
+  - [x] Added tier-based platform limits
+  - [x] Added "How It Works" section
+  - [x] Added security info card
+- [x] Create social posting service (lib/social-posting.ts)
+  - [x] Platform configuration with limits and features
+  - [x] Content formatting per platform
+  - [x] Multi-platform posting function
+  - [x] Post scheduling function
+  - [x] Post history tracking
+  - [x] Content validation per platform
+  - [x] Optimal posting times per platform
+- [x] Add one-tap posting to content creation flow
+  - [x] "Post Now" button when accounts connected
+  - [x] "Connect Accounts" prompt when no accounts
+  - [x] Confirmation dialog before posting
+  - [x] Success/failure feedback
+- [x] Add new icon mappings (briefcase, music.note, at, cloud, pin, lock.fill)

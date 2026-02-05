@@ -77,6 +77,13 @@ const MAPPING: Record<string, MaterialIconName> = {
   "crown.fill": "workspace-premium",
   "creditcard": "credit-card",
   "arrow.clockwise": "refresh",
+  // Additional social platform icons
+  "briefcase": "work",
+  "music.note": "music-note",
+  "at": "alternate-email",
+  "cloud": "cloud",
+  "pin": "push-pin",
+  "lock.fill": "lock",
 };
 
 type IconSymbolName = keyof typeof MAPPING;
