@@ -1,6 +1,6 @@
 import { ScrollView, Text, View, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Modal } from "react-native";
-import { useState, useCallback } from "react";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useState, useCallback, useEffect } from "react";
+import { useFocusEffect, useRouter, useLocalSearchParams } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
@@ -297,12 +297,25 @@ function DatePickerModal({ visible, onClose, onSelectDate, currentDate, postTitl
 export default function CalendarScreen() {
   const colors = useColors();
   const router = useRouter();
+  const params = useLocalSearchParams<{
+    scheduleContent?: string;
+    title?: string;
+    content?: string;
+    contentType?: string;
+    platform?: string;
+  }>();
   const { isAuthenticated } = useAuth();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [editingPost, setEditingPost] = useState<ContentItem | null>(null);
   const [isScheduling, setIsScheduling] = useState(false);
+  const [incomingContent, setIncomingContent] = useState<{
+    title: string;
+    content: string;
+    contentType: string;
+    platform?: string;
+  } | null>(null);
   
   // Drag and drop state
   const [draggingPost, setDraggingPost] = useState<ContentItem | null>(null);
@@ -337,6 +350,28 @@ export default function CalendarScreen() {
       }
     }, [isAuthenticated, refetch])
   );
+
+  // Handle incoming content from create-content screen
+  useEffect(() => {
+    if (params.scheduleContent === "true" && params.title) {
+      setIncomingContent({
+        title: params.title,
+        content: params.content || "",
+        contentType: params.contentType || "social",
+        platform: params.platform,
+      });
+      // Open the schedule modal with the incoming content
+      setShowScheduleModal(true);
+      // Clear the params to prevent re-triggering
+      router.setParams({
+        scheduleContent: undefined,
+        title: undefined,
+        content: undefined,
+        contentType: undefined,
+        platform: undefined,
+      });
+    }
+  }, [params.scheduleContent, params.title, params.content, params.contentType, params.platform]);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -705,8 +740,12 @@ export default function CalendarScreen() {
         onClose={() => {
           setShowScheduleModal(false);
           setEditingPost(null);
+          setIncomingContent(null);
         }}
-        onSchedule={handleSchedule}
+        onSchedule={(data) => {
+          handleSchedule(data);
+          setIncomingContent(null);
+        }}
         selectedDate={selectedDate}
         existingPost={editingPost ? {
           id: editingPost.id,
@@ -715,6 +754,12 @@ export default function CalendarScreen() {
           contentType: editingPost.type,
           platform: editingPost.platform,
           scheduledAt: editingPost.scheduledAt,
+        } : incomingContent ? {
+          id: 0,
+          title: incomingContent.title,
+          content: incomingContent.content,
+          contentType: incomingContent.contentType,
+          platform: incomingContent.platform,
         } : undefined}
         isLoading={isScheduling}
       />

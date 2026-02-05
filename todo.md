@@ -243,3 +243,10 @@
 - [x] Update create-content with platform-specific post buttons
 - [x] Show "Content copied! Opening [Platform]..." feedback
 - [x] Test on device (15 unit tests passing)
+
+## Bug Fixes (v2.8.1) - Critical Content Flow Issues
+- [x] Fix: Cannot view full generated content/article
+- [x] Fix: Calendar not connected to generated content when scheduling
+- [x] Add: Expandable content view for long articles (tap to expand/collapse)
+- [x] Add: Pass generated content to calendar when scheduling (via route params)
+- [x] Test content-to-calendar flow end-to-end (361 tests passing)

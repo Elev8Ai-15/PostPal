@@ -106,6 +106,7 @@ export default function CreateContentScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
   const [connectedPlatforms, setConnectedPlatforms] = useState<PostingSocialPlatform[]>([]);
+  const [isContentExpanded, setIsContentExpanded] = useState(false);
 
   // Load connected platforms on mount
   const loadConnectedPlatforms = async () => {
@@ -820,9 +821,33 @@ export default function CreateContentScreen() {
                   </View>
                 )}
                 
-                <Text className="text-sm text-foreground leading-relaxed">
-                  {getContentForPlatform(previewPlatform)}
-                </Text>
+                {/* Content with expand/collapse */}
+                <TouchableOpacity 
+                  onPress={() => {
+                    triggerHaptic();
+                    setIsContentExpanded(!isContentExpanded);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text 
+                    className="text-sm text-foreground leading-relaxed"
+                    numberOfLines={isContentExpanded ? undefined : 6}
+                  >
+                    {getContentForPlatform(previewPlatform)}
+                  </Text>
+                  {getContentForPlatform(previewPlatform).length > 300 && (
+                    <View className="flex-row items-center justify-center mt-2 py-2">
+                      <Text className="text-xs text-primary font-medium">
+                        {isContentExpanded ? "Show Less" : "Read Full Content"}
+                      </Text>
+                      <IconSymbol 
+                        name={isContentExpanded ? "chevron.up" : "chevron.down"} 
+                        size={14} 
+                        color={colors.primary} 
+                      />
+                    </View>
+                  )}
+                </TouchableOpacity>
                 
                 {/* Hashtags (not for Reddit) */}
                 {previewPlatform !== "reddit" && getHashtagsForPlatform(previewPlatform).length > 0 && (
@@ -911,18 +936,28 @@ export default function CreateContentScreen() {
                   <Text className="font-medium text-foreground">Save as Draft</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  className="flex-1 ml-2 py-3 rounded-xl bg-primary items-center"
-                  onPress={handlePostToAllPlatforms}
+                  className="flex-1 ml-2 py-3 rounded-xl bg-primary items-center flex-row justify-center"
+                  onPress={() => {
+                    triggerHaptic();
+                    // Navigate to calendar with generated content
+                    router.push({
+                      pathname: "/(tabs)/calendar",
+                      params: {
+                        scheduleContent: "true",
+                        title: generatedContent?.title || "",
+                        content: getFullContent(previewPlatform),
+                        contentType: contentType,
+                        platform: previewPlatform,
+                      }
+                    });
+                  }}
                   activeOpacity={0.8}
                   disabled={isSaving || isPosting}
                 >
-                  {isSaving ? (
-                    <ActivityIndicator color={colors.background} size="small" />
-                  ) : (
-                    <Text className="font-medium text-background">
-                      {selectedPlatforms.length > 1 ? "Create Campaign" : "Schedule Post"}
-                    </Text>
-                  )}
+                  <IconSymbol name="calendar" size={18} color={colors.background} />
+                  <Text className="font-medium text-background ml-2">
+                    Schedule to Calendar
+                  </Text>
                 </TouchableOpacity>
               </View>
 
