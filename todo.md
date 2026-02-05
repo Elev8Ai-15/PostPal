@@ -236,3 +236,10 @@
   - [x] Confirmation dialog before posting
   - [x] Success/failure feedback
 - [x] Add new icon mappings (briefcase, music.note, at, cloud, pin, lock.fill)
+
+## Simple Post Flow - Copy + Open App (v2.8)
+- [x] Create simple-posting service with clipboard copy
+- [x] Add deep link URLs for each platform (TikTok, Instagram, Twitter, etc.)
+- [x] Update create-content with platform-specific post buttons
+- [x] Show "Content copied! Opening [Platform]..." feedback
+- [x] Test on device (15 unit tests passing)

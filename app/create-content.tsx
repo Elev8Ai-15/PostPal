@@ -14,6 +14,7 @@ import * as Haptics from "expo-haptics";
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { postToMultiplePlatforms, getConnectedPlatforms, type SocialPlatform as PostingSocialPlatform } from "@/lib/social-posting";
+import { copyAndOpenApp, PLATFORM_CONFIGS, type SocialPlatform as SimplePlatform } from "@/lib/simple-posting";
 
 type ContentType = "social" | "blog" | "newsletter" | "video";
 type SocialPlatform = "instagram" | "twitter" | "linkedin" | "facebook" | "youtube" | "tiktok" | "reddit" | "email" | "blog";
@@ -946,17 +947,45 @@ export default function CreateContentScreen() {
                 </TouchableOpacity>
               )}
 
-              {/* Connect Accounts Prompt */}
-              {connectedPlatforms.length === 0 && (
-                <TouchableOpacity
-                  className="mt-3 py-3 rounded-xl border border-primary items-center flex-row justify-center"
-                  onPress={() => router.push("/social-accounts")}
-                  activeOpacity={0.7}
-                >
-                  <IconSymbol name="share" size={18} color={colors.primary} />
-                  <Text className="font-medium text-primary ml-2">Connect Accounts for One-Tap Posting</Text>
-                </TouchableOpacity>
-              )}
+              {/* Quick Post Buttons - Copy & Open App */}
+              <View className="mt-4">
+                <Text className="text-sm font-semibold text-foreground mb-3">Quick Post (Copy & Open App)</Text>
+                <View className="flex-row flex-wrap">
+                  {selectedPlatforms.map((platformId) => {
+                    const simplePlatformId = platformId as SimplePlatform;
+                    const config = PLATFORM_CONFIGS[simplePlatformId];
+                    if (!config) return null;
+                    return (
+                      <TouchableOpacity
+                        key={platformId}
+                        className="mr-2 mb-2 px-4 py-3 rounded-xl bg-surface border border-border flex-row items-center"
+                        onPress={async () => {
+                          triggerHaptic();
+                          const content = getFullContent(platformId);
+                          const result = await copyAndOpenApp(simplePlatformId, content);
+                          if (result.success) {
+                            Alert.alert("Content Copied!", result.message);
+                          } else {
+                            Alert.alert("Error", result.message);
+                          }
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <View 
+                          className="w-8 h-8 rounded-full items-center justify-center mr-2"
+                          style={{ backgroundColor: config.color + '20' }}
+                        >
+                          <IconSymbol name={config.icon as any} size={16} color={config.color} />
+                        </View>
+                        <Text className="font-medium text-foreground">{config.name}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <Text className="text-xs text-muted mt-2">
+                  Tap a platform to copy content and open the app
+                </Text>
+              </View>
 
               {/* Send for Approval */}
               <TouchableOpacity
