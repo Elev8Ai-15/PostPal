@@ -9,6 +9,9 @@ import { trpc } from "@/lib/trpc";
 import { ScheduleModal, type ScheduleData } from "@/components/schedule-modal";
 import * as Haptics from "expo-haptics";
 import { Platform } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+const LOCAL_SCHEDULE_KEY = "postpal_local_scheduled";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = [
@@ -317,9 +320,37 @@ export default function CalendarScreen() {
     platform?: string;
   } | null>(null);
   
+  // Local scheduled items for guest users
+  const [localScheduledItems, setLocalScheduledItems] = useState<ContentItem[]>([]);
+  
   // Drag and drop state
   const [draggingPost, setDraggingPost] = useState<ContentItem | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
+
+  // Load local scheduled items
+  const loadLocalItems = async () => {
+    try {
+      const stored = await AsyncStorage.getItem(LOCAL_SCHEDULE_KEY);
+      if (stored) {
+        const items = JSON.parse(stored);
+        setLocalScheduledItems(items.map((item: any) => ({
+          ...item,
+          scheduledAt: new Date(item.scheduledAt),
+        })));
+      }
+    } catch (e) {
+      // ignore
+    }
+  };
+
+  const saveLocalItems = async (items: ContentItem[]) => {
+    try {
+      await AsyncStorage.setItem(LOCAL_SCHEDULE_KEY, JSON.stringify(items));
+      setLocalScheduledItems(items);
+    } catch (e) {
+      // ignore
+    }
+  };
 
   // Fetch scheduled posts from backend
   const { data: scheduledPosts, isLoading, refetch } = trpc.posts.scheduled.useQuery(undefined, {
@@ -347,9 +378,18 @@ export default function CalendarScreen() {
     useCallback(() => {
       if (isAuthenticated) {
         refetch();
+      } else {
+        loadLocalItems();
       }
     }, [isAuthenticated, refetch])
   );
+
+  // Also load local items on mount
+  useEffect(() => {
+    if (!isAuthenticated) {
+      loadLocalItems();
+    }
+  }, [isAuthenticated]);
 
   // Handle incoming content from create-content screen
   useEffect(() => {
@@ -395,11 +435,10 @@ export default function CalendarScreen() {
 
   // Convert posts to calendar items
   const getScheduleForDate = (day: number): ContentItem[] => {
-    if (!scheduledPosts) return [];
-    
     const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     
-    return scheduledPosts
+    // Server items (for authenticated users)
+    const serverItems = (scheduledPosts || [])
       .filter(post => {
         if (!post.scheduledAt) return false;
         const postDate = new Date(post.scheduledAt);
@@ -420,6 +459,21 @@ export default function CalendarScreen() {
         if (!a.scheduledAt || !b.scheduledAt) return 0;
         return a.scheduledAt.getTime() - b.scheduledAt.getTime();
       });
+    
+    // Local items (for guest users)
+    const localItems = localScheduledItems
+      .filter(item => {
+        if (!item.scheduledAt) return false;
+        const itemDate = new Date(item.scheduledAt);
+        const itemDateStr = `${itemDate.getFullYear()}-${String(itemDate.getMonth() + 1).padStart(2, "0")}-${String(itemDate.getDate()).padStart(2, "0")}`;
+        return itemDateStr === dateStr;
+      })
+      .sort((a, b) => {
+        if (!a.scheduledAt || !b.scheduledAt) return 0;
+        return new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime();
+      });
+    
+    return [...serverItems, ...localItems];
   };
 
   const selectedItems = getScheduleForDate(selectedDate.getDate());
@@ -444,24 +498,48 @@ export default function CalendarScreen() {
   const handleSchedule = async (data: ScheduleData) => {
     setIsScheduling(true);
     try {
-      if (data.postId) {
-        // Update existing post
-        await updatePostMutation.mutateAsync({
-          id: data.postId,
+      if (isAuthenticated) {
+        // Server-side scheduling for logged-in users
+        if (data.postId) {
+          await updatePostMutation.mutateAsync({
+            id: data.postId,
+            title: data.title,
+            content: data.content,
+            scheduledAt: data.scheduledAt,
+            status: "scheduled",
+          });
+        } else {
+          await createPostMutation.mutateAsync({
+            title: data.title,
+            content: data.content,
+            contentType: data.contentType,
+            platform: data.platform,
+            scheduledAt: data.scheduledAt,
+          });
+        }
+      } else {
+        // Local scheduling for guest users
+        const newItem: ContentItem = {
+          id: Date.now(),
           title: data.title,
+          type: data.contentType,
+          time: formatTime(data.scheduledAt),
+          platform: data.platform,
           content: data.content,
           scheduledAt: data.scheduledAt,
           status: "scheduled",
-        });
-      } else {
-        // Create new post
-        await createPostMutation.mutateAsync({
-          title: data.title,
-          content: data.content,
-          contentType: data.contentType,
-          platform: data.platform,
-          scheduledAt: data.scheduledAt,
-        });
+        };
+        
+        if (data.postId && data.postId > 0) {
+          // Update existing local item
+          const updated = localScheduledItems.map(item => 
+            item.id === data.postId ? { ...newItem, id: data.postId } : item
+          );
+          await saveLocalItems(updated);
+        } else {
+          // Add new local item
+          await saveLocalItems([...localScheduledItems, newItem]);
+        }
       }
 
       if (Platform.OS !== "web") {
@@ -470,6 +548,7 @@ export default function CalendarScreen() {
       
       setShowScheduleModal(false);
       setEditingPost(null);
+      setIncomingContent(null);
       Alert.alert("Success", data.postId ? "Post updated successfully!" : "Content scheduled successfully!");
     } catch (error) {
       console.error("Schedule error:", error);
@@ -499,7 +578,13 @@ export default function CalendarScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              await deletePostMutation.mutateAsync({ id: item.id });
+              if (isAuthenticated) {
+                await deletePostMutation.mutateAsync({ id: item.id });
+              } else {
+                // Delete from local storage
+                const updated = localScheduledItems.filter(i => i.id !== item.id);
+                await saveLocalItems(updated);
+              }
               if (Platform.OS !== "web") {
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               }

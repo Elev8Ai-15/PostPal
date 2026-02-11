@@ -281,3 +281,11 @@
 
 ## Bug Fix (v2.9.2) - Generate Campaign Not Working
 - [x] BUG: Generate Campaign button not producing content - was using protectedProcedure (requires login), added local template-based generation for guest users
+
+## Bug Fixes (v2.9.3) - Content Flow Critical Issues
+- [x] BUG: Generated content not displaying - removed blocking Alert, added auto-scroll to content
+- [x] BUG: Hashtags generation not functioning - added local fallback for guest users
+- [x] BUG: Scheduling posts doesn't save - added AsyncStorage local scheduling for guest users
+- [x] Calendar now shows local scheduled items for guest users
+- [x] Delete posts works locally for guest users
+- [x] Audit full UI/UX flow for missing steps or dead ends

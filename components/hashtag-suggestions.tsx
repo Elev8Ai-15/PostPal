@@ -2,6 +2,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from "rea
 import { useState } from "react";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
+import { useAuth } from "@/hooks/use-auth";
 import { trpc } from "@/lib/trpc";
 
 type Platform = "instagram" | "twitter" | "linkedin" | "facebook" | "youtube" | "tiktok" | "reddit";
@@ -16,6 +17,68 @@ interface HashtagSuggestionsProps {
   onHashtagsGenerated?: (hashtags: string[]) => void;
 }
 
+// Local hashtag generation for guest users
+function generateLocalHashtags(topic: string, platform?: Platform): {
+  hashtags: string[];
+  trending: string[];
+  niche: string[];
+  tips: string;
+} {
+  const words = topic.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+  const camelCase = words.map(w => w.charAt(0).toUpperCase() + w.slice(1)).join("");
+  
+  const platformTrending: Record<string, string[]> = {
+    instagram: ["Reels", "InstaDaily", "ExplorePage", "ContentCreator", "ViralPost", "InstaGrowth"],
+    twitter: ["Trending", "MustRead", "Thread", "BreakingNews", "HotTake", "TechTwitter"],
+    linkedin: ["Leadership", "Innovation", "CareerGrowth", "Networking", "FutureOfWork", "ProfessionalDevelopment"],
+    facebook: ["Community", "ShareThis", "ViralContent", "MustSee", "Trending", "LifeHacks"],
+    youtube: ["Subscribe", "YouTuber", "Tutorial", "HowTo", "MustWatch", "Trending"],
+    tiktok: ["FYP", "ForYouPage", "Viral", "TikTokTrending", "LearnOnTikTok", "LifeHack"],
+  };
+
+  const platformNiche: Record<string, string[]> = {
+    instagram: ["SmallBusiness", "Entrepreneur", "DigitalMarketing", "SocialMediaTips", "GrowthHacking"],
+    twitter: ["StartupLife", "TechNews", "AIRevolution", "DigitalTransformation", "Innovation"],
+    linkedin: ["ThoughtLeadership", "BusinessStrategy", "ExecutiveInsights", "IndustryTrends", "B2BMarketing"],
+    facebook: ["SmallBusinessOwner", "Entrepreneurship", "BusinessGrowth", "MarketingTips", "SuccessStory"],
+    youtube: ["ContentCreation", "VideoMarketing", "BrandBuilding", "OnlineBusiness", "DigitalStrategy"],
+    tiktok: ["SmallBusinessTok", "EntrepreneurLife", "BusinessTips", "MarketingHacks", "SideHustle"],
+  };
+
+  const trending = platformTrending[platform || "instagram"] || platformTrending.instagram;
+  const niche = platformNiche[platform || "instagram"] || platformNiche.instagram;
+  
+  const topicHashtags = [
+    camelCase,
+    ...words.map(w => w.charAt(0).toUpperCase() + w.slice(1)),
+    `${camelCase}Tips`,
+    `${camelCase}Strategy`,
+  ].filter(h => h.length > 2);
+
+  const platformLimits: Record<string, number> = {
+    instagram: 30, twitter: 5, linkedin: 5, facebook: 10, youtube: 15, tiktok: 8,
+  };
+
+  const limit = platformLimits[platform || "instagram"] || 10;
+
+  const tips = platform === "instagram" 
+    ? `Use 20-30 hashtags for maximum reach. Mix trending, niche, and topic-specific tags.`
+    : platform === "twitter"
+    ? `Keep to 2-5 hashtags max. Focus on trending and relevant tags only.`
+    : platform === "linkedin"
+    ? `Use 3-5 professional hashtags. Avoid casual or trending tags.`
+    : platform === "tiktok"
+    ? `Use 3-8 hashtags. Always include #FYP and trending tags for discoverability.`
+    : `Use a mix of popular and niche hashtags relevant to your content.`;
+
+  return {
+    hashtags: [...topicHashtags, ...trending.slice(0, 3), ...niche.slice(0, 3)].slice(0, limit),
+    trending: trending.slice(0, 4),
+    niche: niche.slice(0, 4),
+    tips,
+  };
+}
+
 export function HashtagSuggestions({
   topic,
   content,
@@ -25,31 +88,53 @@ export function HashtagSuggestions({
   onHashtagToggle,
   onHashtagsGenerated,
 }: HashtagSuggestionsProps) {
-  // Support both prop names for backward compatibility
   const handleHashtagToggle = onToggleHashtag || onHashtagToggle || (() => {});
   const searchContent = topic || content || "";
   const colors = useColors();
+  const { isAuthenticated } = useAuth();
   const [suggestions, setSuggestions] = useState<{
     hashtags: string[];
     trending: string[];
     niche: string[];
     tips: string;
   } | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   const suggestMutation = trpc.ai.suggestHashtags.useMutation({
     onSuccess: (data) => {
       setSuggestions(data);
       onHashtagsGenerated?.(data.hashtags || []);
+      setIsLoading(false);
+    },
+    onError: () => {
+      // Fallback to local generation on server error
+      handleLocalGenerate();
     },
   });
 
+  const handleLocalGenerate = () => {
+    const localSuggestions = generateLocalHashtags(searchContent, platform);
+    setSuggestions(localSuggestions);
+    onHashtagsGenerated?.(localSuggestions.hashtags || []);
+    setIsLoading(false);
+  };
+
   const handleGenerateSuggestions = () => {
     if (!hasContent) return;
-    suggestMutation.mutate({
-      content: searchContent,
-      platform,
-      count: platform === "instagram" ? 20 : 10,
-    });
+    setIsLoading(true);
+    
+    if (isAuthenticated) {
+      suggestMutation.mutate({
+        content: searchContent,
+        platform,
+        count: platform === "instagram" ? 20 : 10,
+      });
+    } else {
+      // Local generation for guest users
+      setTimeout(() => {
+        handleLocalGenerate();
+      }, 500); // Small delay for UX feel
+    }
   };
 
   const isSelected = (hashtag: string) => selectedHashtags.includes(hashtag);
@@ -97,17 +182,17 @@ export function HashtagSuggestions({
         </View>
         <TouchableOpacity
           onPress={handleGenerateSuggestions}
-          disabled={suggestMutation.isPending || !hasContent}
+          disabled={isLoading || suggestMutation.isPending || !hasContent}
           style={[
             styles.generateButton,
             { 
-              backgroundColor: suggestMutation.isPending ? colors.muted : colors.primary,
+              backgroundColor: (isLoading || suggestMutation.isPending) ? colors.muted : colors.primary,
               opacity: !hasContent ? 0.5 : 1,
             }
           ]}
           activeOpacity={0.7}
         >
-          {suggestMutation.isPending ? (
+          {(isLoading || suggestMutation.isPending) ? (
             <ActivityIndicator size="small" color={colors.background} />
           ) : (
             <>
@@ -199,13 +284,13 @@ export function HashtagSuggestions({
         <View style={styles.emptyState}>
           <IconSymbol name="sparkles" size={32} color={colors.muted} />
           <Text style={[styles.emptyText, { color: colors.muted }]}>
-            Tap &quot;Generate&quot; to get AI-powered hashtag suggestions based on your content
+            Tap &quot;Generate&quot; to get hashtag suggestions based on your content
           </Text>
         </View>
       )}
 
       {/* Error state */}
-      {suggestMutation.isError && (
+      {suggestMutation.isError && !suggestions && (
         <View style={[styles.errorContainer, { backgroundColor: `${colors.error}15` }]}>
           <IconSymbol name="exclamationmark.triangle" size={16} color={colors.error} />
           <Text style={[styles.errorText, { color: colors.error }]}>
@@ -222,6 +307,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     padding: 16,
+    marginTop: 16,
   },
   header: {
     flexDirection: "row",

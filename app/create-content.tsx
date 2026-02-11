@@ -1,5 +1,5 @@
 import { ScrollView, Text, View, TouchableOpacity, TextInput, StyleSheet, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, Modal } from "react-native";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
@@ -190,6 +190,7 @@ export default function CreateContentScreen() {
   const [quickPostPlatform, setQuickPostPlatform] = useState<SimplePlatform | null>(null);
   const [quickPostContent, setQuickPostContent] = useState<string>("");
   const [showQuickPostEditor, setShowQuickPostEditor] = useState(false);
+  const scrollViewRef = useRef<ScrollView>(null);
 
   // Load connected platforms on mount
   const loadConnectedPlatforms = async () => {
@@ -367,12 +368,10 @@ export default function CreateContentScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
       
-      // Show success message
-      Alert.alert(
-        "Content Generated!",
-        `Your ${selectedPlatforms.length > 1 ? selectedPlatforms.length + " platform-optimized versions have" : "content has"} been created. Scroll down to review, edit, and share.`,
-        [{ text: "Got it" }]
-      );
+      // Auto-scroll to show generated content
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 300);
     } catch (error) {
       console.error("Generation error:", error);
       Alert.alert("Error", "Failed to generate content. Please try again.");
@@ -702,6 +701,7 @@ export default function CreateContentScreen() {
         className="flex-1"
       >
         <ScrollView 
+          ref={scrollViewRef}
           className="flex-1" 
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
