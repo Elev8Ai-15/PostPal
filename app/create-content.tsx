@@ -1,4 +1,4 @@
-import { ScrollView, Text, View, TouchableOpacity, TextInput, StyleSheet, Alert, ActivityIndicator, KeyboardAvoidingView, Platform } from "react-native";
+import { ScrollView, Text, View, TouchableOpacity, TextInput, StyleSheet, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, Modal } from "react-native";
 import { useState, useEffect } from "react";
 import { useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
@@ -14,6 +14,7 @@ import * as Haptics from "expo-haptics";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { postToMultiplePlatforms, getConnectedPlatforms, type SocialPlatform as PostingSocialPlatform } from "@/lib/social-posting";
 import { copyAndOpenApp, PLATFORM_CONFIGS, type SocialPlatform as SimplePlatform } from "@/lib/simple-posting";
+import { logActivity, incrementStat, logQuickPost } from "@/lib/content-store";
 
 type ContentType = "social" | "blog" | "newsletter" | "video";
 type SocialPlatform = "instagram" | "twitter" | "linkedin" | "facebook" | "youtube" | "tiktok" | "reddit" | "email" | "blog";
@@ -108,6 +109,10 @@ export default function CreateContentScreen() {
   const [isContentExpanded, setIsContentExpanded] = useState(true); // Default expanded to show full content
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState<string>("");
+  // Quick Post edit-before-posting modal
+  const [quickPostPlatform, setQuickPostPlatform] = useState<SimplePlatform | null>(null);
+  const [quickPostContent, setQuickPostContent] = useState<string>("");
+  const [showQuickPostEditor, setShowQuickPostEditor] = useState(false);
 
   // Load connected platforms on mount
   const loadConnectedPlatforms = async () => {
@@ -257,6 +262,14 @@ export default function CreateContentScreen() {
       setPreviewPlatform(firstPlatform);
       setIsEditing(false); // Reset editing state
       
+      // Log activity and increment stats
+      await incrementStat("created", firstPlatform);
+      await logActivity({
+        type: "created",
+        title: `${topic.trim().substring(0, 50)}`,
+        platform: firstPlatform,
+      });
+      
       if (Platform.OS !== "web") {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
@@ -326,6 +339,13 @@ export default function CreateContentScreen() {
       }
       
       await AsyncStorage.setItem("postpal_local_drafts", JSON.stringify(drafts));
+      
+      // Log activity
+      await logActivity({
+        type: "created",
+        title: generatedContent.title,
+        platform: selectedPlatforms[0],
+      });
       
       const platformCount = selectedPlatforms.length;
       Alert.alert(
@@ -554,6 +574,13 @@ export default function CreateContentScreen() {
         });
       }
 
+      // Log activity
+      await logActivity({
+        type: "created",
+        title: generatedContent.title,
+        platform: selectedPlatforms[0],
+      });
+      
       const platformCount = selectedPlatforms.length;
       Alert.alert(
         "Sent!", 
@@ -1029,9 +1056,9 @@ export default function CreateContentScreen() {
                 </TouchableOpacity>
               )}
 
-              {/* Quick Post Buttons - Copy & Open App */}
+              {/* Quick Post Buttons - Edit & Copy */}
               <View className="mt-4">
-                <Text className="text-sm font-semibold text-foreground mb-3">Quick Post (Copy & Open App)</Text>
+                <Text className="text-sm font-semibold text-foreground mb-3">Quick Post (Edit & Share)</Text>
                 <View className="flex-row flex-wrap">
                   {selectedPlatforms.map((platformId) => {
                     const simplePlatformId = platformId as SimplePlatform;
@@ -1041,15 +1068,12 @@ export default function CreateContentScreen() {
                       <TouchableOpacity
                         key={platformId}
                         className="mr-2 mb-2 px-4 py-3 rounded-xl bg-surface border border-border flex-row items-center"
-                        onPress={async () => {
+                        onPress={() => {
                           triggerHaptic();
                           const content = getFullContent(platformId);
-                          const result = await copyAndOpenApp(simplePlatformId, content);
-                          if (result.success) {
-                            Alert.alert("Content Copied!", result.message);
-                          } else {
-                            Alert.alert("Error", result.message);
-                          }
+                          setQuickPostPlatform(simplePlatformId);
+                          setQuickPostContent(content);
+                          setShowQuickPostEditor(true);
                         }}
                         activeOpacity={0.7}
                       >
@@ -1065,7 +1089,7 @@ export default function CreateContentScreen() {
                   })}
                 </View>
                 <Text className="text-xs text-muted mt-2">
-                  Tap a platform to copy content and open the app
+                  Tap a platform to review, edit, and share your content
                 </Text>
               </View>
 
@@ -1094,6 +1118,106 @@ export default function CreateContentScreen() {
           <View style={{ height: 100 }} />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Quick Post Editor Modal */}
+      <Modal
+        visible={showQuickPostEditor}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowQuickPostEditor(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          className="flex-1"
+        >
+          <View className="flex-1 bg-black/50 justify-end">
+            <View className="bg-background rounded-t-3xl max-h-[90%]">
+              {/* Modal Header */}
+              <View className="flex-row items-center justify-between p-4 border-b border-border">
+                <TouchableOpacity onPress={() => setShowQuickPostEditor(false)}>
+                  <Text className="text-base text-muted">Cancel</Text>
+                </TouchableOpacity>
+                <View className="items-center">
+                  <Text className="text-lg font-semibold text-foreground">
+                    {quickPostPlatform ? PLATFORM_CONFIGS[quickPostPlatform]?.name : "Quick Post"}
+                  </Text>
+                  {quickPostPlatform && (
+                    <Text className="text-xs text-muted">
+                      {quickPostContent.length}/{PLATFORM_CONFIGS[quickPostPlatform]?.charLimit || 0} chars
+                    </Text>
+                  )}
+                </View>
+                <TouchableOpacity
+                  onPress={async () => {
+                    if (!quickPostPlatform) return;
+                    triggerHaptic();
+                    const result = await copyAndOpenApp(quickPostPlatform, quickPostContent);
+                    await logQuickPost(quickPostPlatform, quickPostContent);
+                    setShowQuickPostEditor(false);
+                    if (result.success) {
+                      Alert.alert("Content Copied!", result.message);
+                    } else {
+                      Alert.alert("Error", result.message);
+                    }
+                  }}
+                >
+                  <Text className="text-base font-semibold text-primary">Copy & Post</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Platform Info */}
+              {quickPostPlatform && (
+                <View className="p-4 border-b border-border">
+                  <View className="flex-row items-center">
+                    <View
+                      className="w-10 h-10 rounded-full items-center justify-center mr-3"
+                      style={{ backgroundColor: (PLATFORM_CONFIGS[quickPostPlatform]?.color || '#000') + '20' }}
+                    >
+                      <IconSymbol
+                        name={PLATFORM_CONFIGS[quickPostPlatform]?.icon as any}
+                        size={20}
+                        color={PLATFORM_CONFIGS[quickPostPlatform]?.color || '#000'}
+                      />
+                    </View>
+                    <View className="flex-1">
+                      <Text className="text-sm font-medium text-foreground">
+                        Posting to {PLATFORM_CONFIGS[quickPostPlatform]?.name}
+                      </Text>
+                      <Text className="text-xs text-muted">
+                        {PLATFORM_CONFIGS[quickPostPlatform]?.instructions}
+                      </Text>
+                    </View>
+                  </View>
+                  {quickPostContent.length > (PLATFORM_CONFIGS[quickPostPlatform]?.charLimit || Infinity) && (
+                    <View className="mt-2 p-2 bg-error/10 rounded-lg">
+                      <Text className="text-xs text-error">
+                        Content exceeds {PLATFORM_CONFIGS[quickPostPlatform]?.name}'s character limit. It will be truncated.
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* Editable Content */}
+              <ScrollView className="px-4 pt-4 pb-8">
+                <Text className="text-sm font-medium text-foreground mb-2">Edit content before posting:</Text>
+                <TextInput
+                  className="bg-surface border border-border rounded-xl p-4"
+                  value={quickPostContent}
+                  onChangeText={setQuickPostContent}
+                  multiline
+                  style={{ minHeight: 200, textAlignVertical: "top", color: colors.foreground }}
+                  placeholder="Your content..."
+                  placeholderTextColor={colors.muted}
+                />
+                <Text className="text-xs text-muted mt-2">
+                  {quickPostContent.length} characters
+                </Text>
+              </ScrollView>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </ScreenContainer>
   );
 }

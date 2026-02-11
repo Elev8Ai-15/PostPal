@@ -266,3 +266,12 @@
 - [x] Add content type filtering to allow TikTok/YouTube for social posts
 - [x] Add pull-to-refresh on Approvals screen
 - [x] Add content type filter on Approvals screen
+
+## Feature Additions & Stabilization (v2.9.0)
+- [x] Connect Approvals to real AsyncStorage data (saved drafts + generated content)
+- [x] Add edit-before-posting flow to Quick Post buttons
+- [x] Replace hardcoded Dashboard metrics with dynamic data tracking
+- [x] Show "No data yet" cards for new users on Dashboard
+- [x] Comprehensive debug, calibration, and stabilization scan
+- [x] Code cleanup: remove old, unused, or misplaced code (cleaned 45+ console.logs from useAuth & OAuth)
+- [x] Final validation: TypeScript 0 errors, 361 tests passing, end-to-end flows verified
