@@ -258,3 +258,11 @@
 - [x] BUG: Full Preview modal shows complete content instead of truncated alert
 - [x] Added success alert after content generation
 - [x] Comprehensive UI/UX audit completed
+
+## Comprehensive Audit Fixes (v2.8.3)
+- [x] Add TikTok to Social Post platform options in create-content.tsx
+- [x] Add TikTok and Reddit to schedule modal PLATFORMS list
+- [x] Fix duplicate Platform import in create-content.tsx
+- [x] Add content type filtering to allow TikTok/YouTube for social posts
+- [x] Add pull-to-refresh on Approvals screen
+- [x] Add content type filter on Approvals screen

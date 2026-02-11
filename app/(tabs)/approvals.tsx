@@ -1,5 +1,5 @@
-import { ScrollView, Text, View, TouchableOpacity, StyleSheet, Alert, Modal, TextInput, KeyboardAvoidingView } from "react-native";
-import { useState } from "react";
+import { ScrollView, Text, View, TouchableOpacity, StyleSheet, Alert, Modal, TextInput, KeyboardAvoidingView, RefreshControl } from "react-native";
+import { useState, useCallback } from "react";
 import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
@@ -174,6 +174,28 @@ export default function ApprovalsScreen() {
   const [editedText, setEditedText] = useState("");
   const [showEditModal, setShowEditModal] = useState(false);
   const [showFullPreview, setShowFullPreview] = useState<ContentItem | null>(null);
+  const [filterType, setFilterType] = useState<"all" | "social" | "blog" | "newsletter" | "video">("all");
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const onRefresh = useCallback(() => {
+    setIsRefreshing(true);
+    // Simulate refresh - in production this would fetch from backend
+    setTimeout(() => {
+      setIsRefreshing(false);
+    }, 1000);
+  }, []);
+
+  const filteredContent = filterType === "all" 
+    ? pendingContent 
+    : pendingContent.filter(item => item.type === filterType);
+
+  const FILTER_OPTIONS: { id: "all" | "social" | "blog" | "newsletter" | "video"; label: string }[] = [
+    { id: "all", label: "All" },
+    { id: "social", label: "Social" },
+    { id: "blog", label: "Blog" },
+    { id: "newsletter", label: "Newsletter" },
+    { id: "video", label: "Video" },
+  ];
 
   const triggerHaptic = () => {
     if (Platform.OS !== "web") {
@@ -244,6 +266,14 @@ export default function ApprovalsScreen() {
         className="flex-1" 
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }
       >
         {/* Header */}
         <View className="px-5 pt-4 pb-2">
@@ -266,10 +296,46 @@ export default function ApprovalsScreen() {
           </View>
         </View>
 
+        {/* Content Type Filter */}
+        {pendingContent.length > 0 && (
+          <View className="px-5 pt-2">
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View className="flex-row">
+                {FILTER_OPTIONS.map((filter) => {
+                  const count = filter.id === "all" 
+                    ? pendingContent.length 
+                    : pendingContent.filter(i => i.type === filter.id).length;
+                  return (
+                    <TouchableOpacity
+                      key={filter.id}
+                      className={`mr-2 px-4 py-2 rounded-full border ${
+                        filterType === filter.id
+                          ? "bg-primary border-primary"
+                          : "bg-surface border-border"
+                      }`}
+                      onPress={() => {
+                        triggerHaptic();
+                        setFilterType(filter.id);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text className={`text-sm font-medium ${
+                        filterType === filter.id ? "text-background" : "text-foreground"
+                      }`}>
+                        {filter.label} ({count})
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </ScrollView>
+          </View>
+        )}
+
         {/* Content List */}
         <View className="px-5 pt-4 pb-8">
-          {pendingContent.length > 0 ? (
-            pendingContent.map((item) => (
+          {filteredContent.length > 0 ? (
+            filteredContent.map((item) => (
               <ApprovalCard
                 key={item.id}
                 item={item}

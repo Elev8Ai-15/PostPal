@@ -1,4 +1,4 @@
-import { ScrollView, Text, View, TouchableOpacity, TextInput, StyleSheet, Alert, ActivityIndicator, KeyboardAvoidingView, Platform as RNPlatform } from "react-native";
+import { ScrollView, Text, View, TouchableOpacity, TextInput, StyleSheet, Alert, ActivityIndicator, KeyboardAvoidingView, Platform } from "react-native";
 import { useState, useEffect } from "react";
 import { useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
@@ -11,7 +11,6 @@ import { HashtagSuggestions } from "@/components/hashtag-suggestions";
 import { PlatformPreview } from "@/components/platform-preview";
 import { SubredditSuggestions } from "@/components/subreddit-suggestions";
 import * as Haptics from "expo-haptics";
-import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { postToMultiplePlatforms, getConnectedPlatforms, type SocialPlatform as PostingSocialPlatform } from "@/lib/social-posting";
 import { copyAndOpenApp, PLATFORM_CONFIGS, type SocialPlatform as SimplePlatform } from "@/lib/simple-posting";
@@ -181,8 +180,8 @@ export default function CreateContentScreen() {
 
   const getAvailablePlatforms = () => {
     return PLATFORMS.filter(p => {
-      if (contentType === "social") return ["instagram", "twitter", "linkedin", "facebook", "reddit"].includes(p.id);
-      if (contentType === "video") return p.id === "youtube";
+      if (contentType === "social") return ["instagram", "twitter", "linkedin", "facebook", "reddit", "tiktok", "youtube"].includes(p.id);
+      if (contentType === "video") return ["youtube", "tiktok"].includes(p.id);
       if (contentType === "newsletter") return p.id === "email";
       if (contentType === "blog") return p.id === "blog";
       return true;
@@ -579,7 +578,7 @@ export default function CreateContentScreen() {
   return (
     <ScreenContainer>
       <KeyboardAvoidingView 
-        behavior={RNPlatform.OS === "ios" ? "padding" : "height"}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         className="flex-1"
       >
         <ScrollView 
@@ -623,8 +622,8 @@ export default function CreateContentScreen() {
                       setContentType(type.id);
                       // Reset platform selection when content type changes
                       const newAvailable = PLATFORMS.filter(p => {
-                        if (type.id === "social") return ["instagram", "twitter", "linkedin", "facebook", "reddit"].includes(p.id);
-                        if (type.id === "video") return p.id === "youtube";
+                        if (type.id === "social") return ["instagram", "twitter", "linkedin", "facebook", "reddit", "tiktok", "youtube"].includes(p.id);
+                        if (type.id === "video") return ["youtube", "tiktok"].includes(p.id);
                         if (type.id === "newsletter") return p.id === "email";
                         if (type.id === "blog") return p.id === "blog";
                         return true;

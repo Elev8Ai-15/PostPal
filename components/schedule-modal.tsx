@@ -56,6 +56,8 @@ const PLATFORMS = [
   { id: "linkedin", name: "LinkedIn" },
   { id: "facebook", name: "Facebook" },
   { id: "youtube", name: "YouTube" },
+  { id: "tiktok", name: "TikTok" },
+  { id: "reddit", name: "Reddit" },
 ];
 
 export function ScheduleModal({ 
