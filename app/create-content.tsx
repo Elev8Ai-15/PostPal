@@ -77,6 +77,83 @@ const PLATFORM_FORMATTING: Record<string, { prefix?: string; suffix?: string; st
   reddit: { style: "Authentic, community-first, no promotional language, subreddit-aware" },
 };
 
+// Local content generation for guest users (no server needed)
+function generateLocalContent(params: {
+  contentType: ContentType;
+  platform: string;
+  topic: string;
+  tone: string;
+  keywords: string[];
+  formatting: string;
+  charLimit?: number;
+}): { content: string; hashtags: string[]; title: string; callToAction: string } {
+  const { contentType, platform, topic, tone, keywords, charLimit } = params;
+  const keywordStr = keywords.length > 0 ? keywords.join(", ") : "";
+  
+  const toneStyles: Record<string, { opener: string; style: string }> = {
+    professional: { opener: "Here's what you need to know about", style: "data-driven and insightful" },
+    casual: { opener: "Let's talk about", style: "relaxed and approachable" },
+    friendly: { opener: "Hey! Let's dive into", style: "warm and inviting" },
+    authoritative: { opener: "The definitive guide to", style: "expert and commanding" },
+    humorous: { opener: "Plot twist:", style: "witty and entertaining" },
+  };
+  
+  const ts = toneStyles[tone] || toneStyles.professional;
+  
+  const platformContent: Record<string, () => { content: string; hashtags: string[] }> = {
+    instagram: () => ({
+      content: `${ts.opener} ${topic}! \u2728\n\n${keywordStr ? `When it comes to ${keywordStr}, ` : ""}This is a game-changer for anyone looking to level up.\n\n\u2714\uFE0F Key insight: ${topic} is transforming how we think about success\n\u2714\uFE0F Pro tip: Start small, think big, and stay consistent\n\u2714\uFE0F Remember: Every expert was once a beginner\n\nDouble tap if you agree! \u{1F44D} Drop a \u{1F525} in the comments if you're ready to take action.\n\n#${topic.replace(/\s+/g, "")} #ContentCreator #GrowthMindset`,
+      hashtags: [topic.replace(/\s+/g, ""), "ContentCreator", "GrowthMindset", "DigitalMarketing", "Success", ...keywords.map(k => k.replace(/\s+/g, ""))].slice(0, 15),
+    }),
+    twitter: () => ({
+      content: `${ts.opener} ${topic}:\n\n${keywordStr ? `${keywordStr} are reshaping the landscape. ` : ""}Here's the thing most people miss \u{1F447}\n\nThe key to success isn't just knowing about ${topic} \u2014 it's taking action on it TODAY.\n\nRT if you agree \u{1F504}`,
+      hashtags: [topic.replace(/\s+/g, ""), ...keywords.map(k => k.replace(/\s+/g, ""))].slice(0, 5),
+    }),
+    linkedin: () => ({
+      content: `${ts.opener} ${topic}.\n\n${keywordStr ? `In the world of ${keywordStr}, ` : ""}I've been reflecting on how ${topic} is reshaping our industry.\n\nHere are 3 key takeaways:\n\n1. Innovation starts with understanding the fundamentals\n2. The most successful professionals embrace continuous learning\n3. Collaboration and authentic networking drive real results\n\nWhat's your experience with ${topic}? I'd love to hear your perspective in the comments.\n\n#${topic.replace(/\s+/g, "")} #ProfessionalDevelopment #ThoughtLeadership`,
+      hashtags: [topic.replace(/\s+/g, ""), "ProfessionalDevelopment", "ThoughtLeadership", "Innovation", ...keywords.map(k => k.replace(/\s+/g, ""))].slice(0, 5),
+    }),
+    facebook: () => ({
+      content: `${ts.opener} ${topic}! \u{1F680}\n\n${keywordStr ? `If you're interested in ${keywordStr}, ` : ""}This is something I'm really passionate about and I wanted to share my thoughts with you all.\n\n${topic} has the power to transform the way we approach our goals. Whether you're just starting out or you're a seasoned pro, there's always something new to learn.\n\nWhat do you think? Share your thoughts below! \u{1F447}\n\nLike & Share if this resonates with you! \u2764\uFE0F`,
+      hashtags: [topic.replace(/\s+/g, ""), ...keywords.map(k => k.replace(/\s+/g, ""))].slice(0, 5),
+    }),
+    tiktok: () => ({
+      content: `\u{1F6A8} STOP SCROLLING \u{1F6A8}\n\n${ts.opener} ${topic}...\n\n${keywordStr ? `${keywordStr} are about to blow up and here's why \u{1F447}` : "Here's what nobody is telling you \u{1F447}"}\n\nThis is the sign you've been waiting for. ${topic} is YOUR moment.\n\nFollow for more \u{1F525}\n\n#${topic.replace(/\s+/g, "")} #FYP #Viral #LearnOnTikTok`,
+      hashtags: [topic.replace(/\s+/g, ""), "FYP", "Viral", "LearnOnTikTok", "Trending", ...keywords.map(k => k.replace(/\s+/g, ""))].slice(0, 8),
+    }),
+    youtube: () => ({
+      content: `${topic} - The Complete Guide\n\n${keywordStr ? `Covering: ${keywordStr}\n\n` : ""}In this video, we dive deep into ${topic} and break down everything you need to know.\n\n\u23F0 Timestamps:\n0:00 - Introduction\n1:30 - Why ${topic} matters\n3:00 - Key strategies\n5:00 - Common mistakes to avoid\n7:00 - Action steps\n9:00 - Final thoughts\n\n\u{1F514} Subscribe and hit the bell for more content like this!\n\n#${topic.replace(/\s+/g, "")} #YouTube`,
+      hashtags: [topic.replace(/\s+/g, ""), "YouTube", ...keywords.map(k => k.replace(/\s+/g, ""))].slice(0, 10),
+    }),
+    reddit: () => ({
+      content: `${topic} - Thoughts and Discussion\n\n${keywordStr ? `I've been looking into ${keywordStr} and ` : ""}I wanted to share some thoughts on ${topic} and get the community's perspective.\n\nHere's what I've found:\n\n- The landscape is changing rapidly\n- There are some really interesting developments happening\n- Most people are overlooking key aspects\n\nWhat's your experience? Has anyone else noticed these trends?\n\nWould love to hear different viewpoints on this.`,
+      hashtags: [],
+    }),
+    email: () => ({
+      content: `Subject: ${topic} - What You Need to Know\n\nHi there,\n\n${ts.opener} ${topic}.\n\n${keywordStr ? `When it comes to ${keywordStr}, ` : ""}There are some exciting developments I wanted to share with you.\n\nKey Highlights:\n\u2022 New insights that could change your approach\n\u2022 Practical tips you can implement today\n\u2022 Resources to help you get started\n\nReady to learn more? Click below to dive in.\n\n[Call to Action Button]\n\nBest regards,\nYour Team`,
+      hashtags: [],
+    }),
+    blog: () => ({
+      content: `# ${topic}: A Comprehensive Guide\n\n${keywordStr ? `*Keywords: ${keywordStr}*\n\n` : ""}## Introduction\n\n${topic} is one of the most important topics in today's landscape. Whether you're a beginner or an experienced professional, understanding the nuances can give you a significant advantage.\n\n## Why ${topic} Matters\n\nIn an ever-evolving world, staying ahead means embracing new ideas and approaches. ${topic} represents a shift in how we think about success and growth.\n\n## Key Strategies\n\n### 1. Start with the Fundamentals\nBefore diving into advanced techniques, make sure you have a solid foundation.\n\n### 2. Stay Consistent\nConsistency is the key to long-term success in any endeavor.\n\n### 3. Measure and Adapt\nTrack your progress and be willing to adjust your approach based on results.\n\n## Conclusion\n\n${topic} is more than just a trend \u2014 it's a fundamental shift in how we approach our goals. Start implementing these strategies today and watch the results unfold.\n\n*What are your thoughts on ${topic}? Share in the comments below!*`,
+      hashtags: [],
+    }),
+  };
+  
+  const generator = platformContent[platform] || platformContent.instagram;
+  const generated = generator();
+  
+  // Trim content to character limit if needed
+  if (charLimit && generated.content.length > charLimit) {
+    generated.content = generated.content.substring(0, charLimit - 3) + "...";
+  }
+  
+  return {
+    ...generated,
+    title: `Campaign: ${topic.substring(0, 50)}`,
+    callToAction: `Learn more about ${topic}`,
+  };
+}
+
 export default function CreateContentScreen() {
   const colors = useColors();
   const router = useRouter();
@@ -229,13 +306,29 @@ export default function CreateContentScreen() {
         const platformInfo = PLATFORMS.find(p => p.id === platformId);
         const formatting = PLATFORM_FORMATTING[platformId];
         
-        const result = await generateMutation.mutateAsync({
-          contentType,
-          platform: platformId,
-          topic: topic.trim(),
-          tone,
-          keywords: keywords ? keywords.split(",").map(k => k.trim()).filter(Boolean) : undefined,
-        });
+        let result: { content: string; hashtags?: string[]; title?: string; callToAction?: string };
+        
+        if (isAuthenticated) {
+          // Use server AI generation for authenticated users
+          result = await generateMutation.mutateAsync({
+            contentType,
+            platform: platformId,
+            topic: topic.trim(),
+            tone,
+            keywords: keywords ? keywords.split(",").map(k => k.trim()).filter(Boolean) : undefined,
+          });
+        } else {
+          // Local template-based generation for guest users
+          result = generateLocalContent({
+            contentType,
+            platform: platformId,
+            topic: topic.trim(),
+            tone,
+            keywords: keywords ? keywords.split(",").map(k => k.trim()).filter(Boolean) : [],
+            formatting: formatting?.style || "",
+            charLimit: platformInfo?.charLimit,
+          });
+        }
 
         platformVersions[platformId] = {
           content: result.content,

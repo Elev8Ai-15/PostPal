@@ -278,3 +278,6 @@
 
 ## Bug Fix (v2.9.1) - Platform Selection
 - [x] BUG: Cannot select platforms other than Instagram - was free tier maxPlatforms:1, now set to 7
+
+## Bug Fix (v2.9.2) - Generate Campaign Not Working
+- [x] BUG: Generate Campaign button not producing content - was using protectedProcedure (requires login), added local template-based generation for guest users
