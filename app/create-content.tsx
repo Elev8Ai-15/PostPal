@@ -145,10 +145,10 @@ export default function CreateContentScreen() {
         // Check subscription limit
         if (!canUsePlatforms(prev.length + 1)) {
           Alert.alert(
-            "Platform Limit Reached",
-            `Your plan allows ${limits.maxPlatforms} platform(s). Upgrade to use more!`,
+            "Platform Limit",
+            `You can select up to ${limits.maxPlatforms} platforms. Deselect one first, or upgrade your plan for more.`,
             [
-              { text: "Cancel", style: "cancel" },
+              { text: "OK", style: "cancel" },
               { text: "Upgrade", onPress: () => router.push("/subscription") },
             ]
           );

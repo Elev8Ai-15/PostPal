@@ -27,8 +27,8 @@ export interface SubscriptionFeatures {
 
 // Default free tier limits
 const FREE_LIMITS: SubscriptionLimits = {
-  maxPlatforms: 1,
-  maxPostsPerWeek: 2,
+  maxPlatforms: 7,
+  maxPostsPerWeek: 10,
   maxTeamMembers: 1,
   analyticsRetentionDays: 7,
 };

@@ -275,3 +275,6 @@
 - [x] Comprehensive debug, calibration, and stabilization scan
 - [x] Code cleanup: remove old, unused, or misplaced code (cleaned 45+ console.logs from useAuth & OAuth)
 - [x] Final validation: TypeScript 0 errors, 361 tests passing, end-to-end flows verified
+
+## Bug Fix (v2.9.1) - Platform Selection
+- [x] BUG: Cannot select platforms other than Instagram - was free tier maxPlatforms:1, now set to 7
