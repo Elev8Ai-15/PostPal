@@ -323,3 +323,8 @@
 - [x] Reset brand settings functionality
 - [x] Brand preview card in Settings
 - [x] 19 unit tests passing for brand integration
+
+## Bug Fix (v2.10.1) - Build/Download Issue
+- [x] Diagnose why latest build isn't showing up for download
+- [x] Fix any blocking issues preventing APK build (no code issues found - 0 TS errors, web export succeeds, 380 tests pass)
+- [x] Verify checkpoint is accessible and publishable
