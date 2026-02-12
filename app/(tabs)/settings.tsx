@@ -231,6 +231,16 @@ export default function SettingsScreen() {
           />
         </SettingSection>
 
+        {/* My Brand */}
+        <SettingSection title="My Brand">
+          <SettingItem
+            icon="paintbrush"
+            title="Brand Settings"
+            subtitle="Personalize AI content with your brand"
+            onPress={() => router.push("/my-brand")}
+          />
+        </SettingSection>
+
         {/* Connected Accounts */}
         <SettingSection title="Connected Accounts">
           <SettingItem
@@ -238,6 +248,13 @@ export default function SettingsScreen() {
             title="Manage Social Accounts"
             subtitle="Connect Instagram, Twitter, LinkedIn, and more"
             onPress={() => router.push("/social-accounts")}
+          />
+          <Divider />
+          <SettingItem
+            icon="bolt.fill"
+            title="Upload-Post API"
+            subtitle="Enable real one-tap posting to all platforms"
+            onPress={() => router.push("/upload-post-settings")}
           />
         </SettingSection>
 

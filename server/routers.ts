@@ -760,6 +760,7 @@ Keep the reply concise but helpful. Return JSON: { "reply": "your suggested repl
         topic: z.string().min(1),
         tone: z.enum(["professional", "casual", "friendly", "authoritative", "humorous"]).optional(),
         keywords: z.array(z.string()).optional(),
+        brandContext: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
         const platformInstructions: Record<string, string> = {
@@ -786,6 +787,10 @@ Keep the reply concise but helpful. Return JSON: { "reply": "your suggested repl
 ${input.platform ? platformInstructions[input.platform] : ""}
 ${input.tone ? toneInstructions[input.tone] : "Use a professional tone."}
 ${input.keywords?.length ? `Include these keywords naturally: ${input.keywords.join(", ")}` : ""}
+${input.brandContext ? `
+IMPORTANT BRAND CONTEXT - Personalize the content to match this brand:
+${input.brandContext}
+Make sure the content reflects the brand's identity, tone, and speaks to their target audience. Reference the brand naturally where appropriate.` : ""}
 
 Return your response as JSON with the following structure:
 {

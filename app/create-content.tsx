@@ -15,6 +15,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { postToMultiplePlatforms, getConnectedPlatforms, type SocialPlatform as PostingSocialPlatform } from "@/lib/social-posting";
 import { copyAndOpenApp, PLATFORM_CONFIGS, type SocialPlatform as SimplePlatform } from "@/lib/simple-posting";
 import { logActivity, incrementStat, logQuickPost } from "@/lib/content-store";
+import { useBrand } from "@/hooks/use-brand";
+import { isApiConfigured, postText, type MultiPostResult } from "@/lib/upload-post-api";
 
 type ContentType = "social" | "blog" | "newsletter" | "video";
 type SocialPlatform = "instagram" | "twitter" | "linkedin" | "facebook" | "youtube" | "tiktok" | "reddit" | "email" | "blog";
@@ -86,9 +88,12 @@ function generateLocalContent(params: {
   keywords: string[];
   formatting: string;
   charLimit?: number;
+  brandName?: string;
+  brandTagline?: string;
 }): { content: string; hashtags: string[]; title: string; callToAction: string } {
-  const { contentType, platform, topic, tone, keywords, charLimit } = params;
+  const { contentType, platform, topic, tone, keywords, charLimit, brandName, brandTagline } = params;
   const keywordStr = keywords.length > 0 ? keywords.join(", ") : "";
+  const brandSuffix = brandName ? `\n\n— ${brandName}${brandTagline ? ` | ${brandTagline}` : ""}` : "";
   
   const toneStyles: Record<string, { opener: string; style: string }> = {
     professional: { opener: "Here's what you need to know about", style: "data-driven and insightful" },
@@ -190,7 +195,10 @@ export default function CreateContentScreen() {
   const [quickPostPlatform, setQuickPostPlatform] = useState<SimplePlatform | null>(null);
   const [quickPostContent, setQuickPostContent] = useState<string>("");
   const [showQuickPostEditor, setShowQuickPostEditor] = useState(false);
+  const [uploadPostEnabled, setUploadPostEnabled] = useState(false);
+  const [uploadPostResult, setUploadPostResult] = useState<MultiPostResult | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
+  const { brand, isConfigured: isBrandConfigured, getBrandContext } = useBrand();
 
   // Load connected platforms on mount
   const loadConnectedPlatforms = async () => {
@@ -198,10 +206,16 @@ export default function CreateContentScreen() {
     setConnectedPlatforms(connected);
   };
 
-  // Check connected platforms when component mounts
+  // Check connected platforms and Upload-Post API status on mount
   useEffect(() => {
     loadConnectedPlatforms();
+    checkUploadPostStatus();
   }, []);
+
+  const checkUploadPostStatus = async () => {
+    const configured = await isApiConfigured();
+    setUploadPostEnabled(configured);
+  };
 
   const generateMutation = trpc.ai.generateContent.useMutation();
   const createPostMutation = trpc.posts.create.useMutation();
@@ -311,12 +325,15 @@ export default function CreateContentScreen() {
         
         if (isAuthenticated) {
           // Use server AI generation for authenticated users
+          // Include brand context if configured
+          const brandContext = isBrandConfigured ? getBrandContext() : undefined;
           result = await generateMutation.mutateAsync({
             contentType,
             platform: platformId,
             topic: topic.trim(),
             tone,
             keywords: keywords ? keywords.split(",").map(k => k.trim()).filter(Boolean) : undefined,
+            brandContext,
           });
         } else {
           // Local template-based generation for guest users
@@ -328,6 +345,8 @@ export default function CreateContentScreen() {
             keywords: keywords ? keywords.split(",").map(k => k.trim()).filter(Boolean) : [],
             formatting: formatting?.style || "",
             charLimit: platformInfo?.charLimit,
+            brandName: isBrandConfigured ? brand.brandName : undefined,
+            brandTagline: isBrandConfigured ? brand.tagline : undefined,
           });
         }
 
@@ -884,6 +903,44 @@ export default function CreateContentScreen() {
             />
           </View>
 
+          {/* Brand Context Indicator */}
+          {isBrandConfigured && (
+            <View className="px-5 pt-4">
+              <TouchableOpacity
+                className="flex-row items-center px-4 py-3 rounded-xl border"
+                style={{ backgroundColor: `${colors.primary}08`, borderColor: `${colors.primary}25` }}
+                onPress={() => router.push("/my-brand")}
+                activeOpacity={0.7}
+              >
+                <IconSymbol name="checkmark.seal.fill" size={18} color={colors.primary} />
+                <View className="flex-1 ml-2">
+                  <Text className="text-sm font-medium text-foreground">
+                    Brand: {brand.brandName}
+                  </Text>
+                  <Text className="text-xs text-muted">
+                    AI content will be personalized to your brand
+                  </Text>
+                </View>
+                <IconSymbol name="chevron.right" size={14} color={colors.muted} />
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Upload-Post API Status */}
+          {uploadPostEnabled && (
+            <View className="px-5 pt-3">
+              <View
+                className="flex-row items-center px-4 py-2.5 rounded-xl"
+                style={{ backgroundColor: '#6366F115' }}
+              >
+                <IconSymbol name="bolt.fill" size={16} color="#6366F1" />
+                <Text className="text-xs font-medium ml-2" style={{ color: '#6366F1' }}>
+                  Upload-Post API connected — real posting enabled
+                </Text>
+              </View>
+            </View>
+          )}
+
           {/* Generate Button */}
           <View className="px-5 pt-6">
             <TouchableOpacity
@@ -1143,6 +1200,103 @@ export default function CreateContentScreen() {
                       <IconSymbol name="paperplane.fill" size={18} color={colors.background} />
                       <Text className="font-semibold text-background ml-2">
                         Post Now to {selectedPlatforms.filter(p => connectedPlatforms.includes(p as PostingSocialPlatform)).length} Platform{selectedPlatforms.filter(p => connectedPlatforms.includes(p as PostingSocialPlatform)).length !== 1 ? "s" : ""}
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
+
+              {/* Upload-Post API - Real Posting */}
+              {uploadPostEnabled && (
+                <TouchableOpacity
+                  className="mt-3 py-3 rounded-xl items-center flex-row justify-center"
+                  style={{ backgroundColor: '#6366F1' }}
+                  onPress={async () => {
+                    if (!generatedContent) return;
+                    triggerHaptic();
+
+                    const platformNames = selectedPlatforms
+                      .map(p => PLATFORMS.find(pl => pl.id === p)?.name || p)
+                      .join(", ");
+
+                    Alert.alert(
+                      "Post via Upload-Post API",
+                      `This will post directly to: ${platformNames}\n\nAre you sure?`,
+                      [
+                        { text: "Cancel", style: "cancel" },
+                        {
+                          text: "Post Now",
+                          style: "default",
+                          onPress: async () => {
+                            setIsPosting(true);
+                            try {
+                              // Build platform-specific content map
+                              const platformContent: Record<string, string> = {};
+                              for (const pid of selectedPlatforms) {
+                                platformContent[pid] = getFullContent(pid);
+                              }
+
+                              const result = await postText({
+                                platforms: selectedPlatforms,
+                                content: getFullContent(selectedPlatforms[0]),
+                                platformContent,
+                                subreddit: targetSubreddits[0],
+                              });
+
+                              setUploadPostResult(result);
+
+                              if (result.overallSuccess) {
+                                if (Platform.OS !== "web") {
+                                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                                }
+                                Alert.alert(
+                                  "Posted!",
+                                  `Successfully posted to ${result.successPlatforms.length} platform(s).`,
+                                  [{ text: "OK" }]
+                                );
+                              } else {
+                                const successMsg = result.successPlatforms.length > 0
+                                  ? `\n\nSucceeded: ${result.successPlatforms.join(", ")}`
+                                  : "";
+                                const failMsg = result.failedPlatforms.length > 0
+                                  ? `\n\nFailed: ${result.results.filter(r => !r.success).map(r => `${r.platform}: ${r.error}`).join("\n")}`
+                                  : "";
+                                Alert.alert(
+                                  "Partial Success",
+                                  `Some platforms had issues.${successMsg}${failMsg}`,
+                                  [{ text: "OK" }]
+                                );
+                              }
+
+                              // Log activity
+                              for (const pid of selectedPlatforms) {
+                                await logActivity({
+                                  type: "published",
+                                  title: generatedContent.title,
+                                  platform: pid,
+                                });
+                                await incrementStat("published", pid);
+                              }
+                            } catch (error: any) {
+                              Alert.alert("Error", error.message || "Failed to post via Upload-Post API.");
+                            } finally {
+                              setIsPosting(false);
+                            }
+                          },
+                        },
+                      ]
+                    );
+                  }}
+                  activeOpacity={0.8}
+                  disabled={isSaving || isPosting}
+                >
+                  {isPosting ? (
+                    <ActivityIndicator color="#FFFFFF" size="small" />
+                  ) : (
+                    <>
+                      <IconSymbol name="bolt.fill" size={18} color="#FFFFFF" />
+                      <Text className="font-semibold ml-2" style={{ color: '#FFFFFF' }}>
+                        Post via Upload-Post ({selectedPlatforms.length} Platform{selectedPlatforms.length !== 1 ? "s" : ""})
                       </Text>
                     </>
                   )}

@@ -294,3 +294,32 @@
 - [x] Grant lifetime unlimited access to bradgpowell1123@gmail.com
 - [x] Add owner email check in subscription system (server-side db.ts + client-side use-subscription.ts)
 - [x] Bypass all tier limits for owner account (Vibe tier with all features, unlimited posts, all platforms)
+
+## Upload-Post API Integration (v2.10)
+- [x] Research Upload-Post API endpoints, auth, and supported platforms
+- [x] Add Upload-Post API key management in Settings (upload-post-settings.tsx)
+- [x] Create Upload-Post service layer for real posting (lib/upload-post-api.ts)
+- [x] Connect real posting to Create screen "Post Now" flow
+- [x] Handle posting success/failure feedback per platform
+- [x] Support all 9+ platforms via Upload-Post API (text posting for X, LinkedIn, Facebook, Threads, Reddit, Bluesky)
+- [x] Add confirmation dialog before posting
+- [x] Show Upload-Post API status indicator on Create screen
+- [x] 19 unit tests passing for Upload-Post integration
+
+## My Brand Settings (v2.10)
+- [x] Create My Brand settings screen with brand fields (my-brand.tsx)
+- [x] Brand name input field
+- [x] Tagline input field
+- [x] Tone of voice selector (professional, casual, witty, inspirational, educational, bold, empathetic, friendly)
+- [x] Target audience description field
+- [x] Industry/niche selector (20 industries)
+- [x] Brand colors picker with custom hex input
+- [x] Key topics/themes tags with add/remove
+- [x] Website URL field
+- [x] Unique Selling Point field
+- [x] Persist brand settings with AsyncStorage (use-brand.ts hook)
+- [x] Connect brand settings to AI content generation for personalized output (server + local)
+- [x] Show brand context indicator on Create screen
+- [x] Reset brand settings functionality
+- [x] Brand preview card in Settings
+- [x] 19 unit tests passing for brand integration

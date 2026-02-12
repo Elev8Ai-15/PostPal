@@ -84,6 +84,18 @@ const MAPPING: Record<string, MaterialIconName> = {
   "cloud": "cloud",
   "pin": "push-pin",
   "lock.fill": "lock",
+  // Brand & API icons
+  "paintbrush": "brush",
+  "building.2": "business",
+  "megaphone": "campaign",
+  "palette": "palette",
+  "tag.fill": "label",
+  "link": "link",
+  "key": "vpn-key",
+  "bolt.fill": "bolt",
+  "antenna.radiowaves.left.and.right": "cell-tower",
+  "arrow.up.circle.fill": "publish",
+  "checkmark.seal.fill": "verified",
 };
 
 type IconSymbolName = keyof typeof MAPPING;
