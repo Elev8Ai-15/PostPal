@@ -48,8 +48,11 @@ const FREE_FEATURES: SubscriptionFeatures = {
   hasApiAccess: false,
 };
 
+// Owner emails get lifetime unlimited access on client side too
+const OWNER_EMAILS = ["bradgpowell1123@gmail.com"];
+
 export function useSubscription() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   
   const { data: subscriptionData, isLoading, refetch } = trpc.subscription.current.useQuery(
     undefined,
@@ -64,16 +67,41 @@ export function useSubscription() {
   const plan = subscriptionData?.plan;
   const subscription = subscriptionData?.subscription;
 
-  const tier: SubscriptionTier = (plan?.name as SubscriptionTier) || "free";
+  // Owner override: if logged in as owner email, force Vibe tier
+  const isOwner = user?.email ? OWNER_EMAILS.includes(user.email.toLowerCase()) : false;
+
+  const tier: SubscriptionTier = isOwner ? "vibe" : ((plan?.name as SubscriptionTier) || "free");
   
-  const limits: SubscriptionLimits = plan ? {
+  const OWNER_LIMITS: SubscriptionLimits = {
+    maxPlatforms: 7,
+    maxPostsPerWeek: -1,
+    maxTeamMembers: 10,
+    analyticsRetentionDays: -1,
+  };
+
+  const OWNER_FEATURES: SubscriptionFeatures = {
+    hasRecurringTemplates: true,
+    hasUnifiedInbox: true,
+    hasSavedReplies: true,
+    hasAutoResponders: true,
+    hasAiReplySuggestions: true,
+    hasVideoContent: true,
+    hasCampaignAnalytics: true,
+    hasAiStrategy: true,
+    hasSubredditTargeting: true,
+    hasExportReports: true,
+    hasPrioritySupport: true,
+    hasApiAccess: true,
+  };
+
+  const limits: SubscriptionLimits = isOwner ? OWNER_LIMITS : (plan ? {
     maxPlatforms: plan.maxPlatforms,
     maxPostsPerWeek: plan.maxPostsPerWeek,
     maxTeamMembers: plan.maxTeamMembers,
     analyticsRetentionDays: plan.analyticsRetentionDays,
-  } : FREE_LIMITS;
+  } : FREE_LIMITS);
 
-  const features: SubscriptionFeatures = plan ? {
+  const features: SubscriptionFeatures = isOwner ? OWNER_FEATURES : (plan ? {
     hasRecurringTemplates: plan.hasRecurringTemplates,
     hasUnifiedInbox: plan.hasUnifiedInbox,
     hasSavedReplies: plan.hasSavedReplies,
@@ -86,16 +114,16 @@ export function useSubscription() {
     hasExportReports: plan.hasExportReports,
     hasPrioritySupport: plan.hasPrioritySupport,
     hasApiAccess: plan.hasApiAccess,
-  } : FREE_FEATURES;
+  } : FREE_FEATURES);
 
-  const isPaid = tier !== "free";
-  const isUnlimited = limits.maxPostsPerWeek === -1;
+  const isPaid = isOwner || tier !== "free";
+  const isUnlimited = isOwner || limits.maxPostsPerWeek === -1;
   
   const postsRemaining = canPostData?.limit && canPostData?.used !== undefined
     ? canPostData.limit - canPostData.used
     : limits.maxPostsPerWeek;
 
-  const canPost = canPostData?.canPost ?? true;
+  const canPost = isOwner || (canPostData?.canPost ?? true);
   const postLimitReason = canPostData?.reason;
 
   // Check if user can use a specific number of platforms

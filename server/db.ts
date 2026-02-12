@@ -5,6 +5,16 @@ import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
+// Owner emails get lifetime unlimited (Vibe) access
+const OWNER_EMAILS = [
+  "bradgpowell1123@gmail.com",
+];
+
+export function isOwnerEmail(email: string | null | undefined): boolean {
+  if (!email) return false;
+  return OWNER_EMAILS.includes(email.toLowerCase());
+}
+
 // Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
@@ -771,6 +781,32 @@ export async function getUserSubscription(userId: number) {
 export async function getUserSubscriptionWithPlan(userId: number) {
   const db = await getDb();
   if (!db) return null;
+
+  // Check if this user is an owner — grant lifetime Vibe access
+  const userResult = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  if (userResult.length > 0 && isOwnerEmail(userResult[0].email)) {
+    const vibePlan = await getPlanByName("vibe");
+    if (vibePlan) {
+      return {
+        subscription: {
+          id: -1,
+          userId,
+          planId: vibePlan.id,
+          status: "active" as const,
+          postsThisWeek: 0,
+          weekStartDate: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          stripeCustomerId: null,
+          stripeSubscriptionId: null,
+          currentPeriodStart: null,
+          currentPeriodEnd: null,
+          cancelAtPeriodEnd: false,
+        },
+        plan: vibePlan,
+      };
+    }
+  }
   
   const subscription = await getUserSubscription(userId);
   if (!subscription) {
@@ -839,6 +875,15 @@ export async function incrementPostCount(userId: number) {
 }
 
 export async function canUserPost(userId: number): Promise<{ canPost: boolean; reason?: string; limit?: number; used?: number }> {
+  // Owner always can post
+  const ownerDb = await getDb();
+  if (ownerDb) {
+    const ownerCheck = await ownerDb.select().from(users).where(eq(users.id, userId)).limit(1);
+    if (ownerCheck.length > 0 && isOwnerEmail(ownerCheck[0].email)) {
+      return { canPost: true };
+    }
+  }
+
   const subData = await getUserSubscriptionWithPlan(userId);
   if (!subData || !subData.plan) {
     return { canPost: true }; // Allow if no plan data (fallback)
@@ -894,6 +939,15 @@ export async function canUserUsePlatform(userId: number, platformCount: number):
 }
 
 export async function hasFeature(userId: number, feature: string): Promise<boolean> {
+  // Owner has all features
+  const ownerDb = await getDb();
+  if (ownerDb) {
+    const ownerCheck = await ownerDb.select().from(users).where(eq(users.id, userId)).limit(1);
+    if (ownerCheck.length > 0 && isOwnerEmail(ownerCheck[0].email)) {
+      return true;
+    }
+  }
+
   const subData = await getUserSubscriptionWithPlan(userId);
   if (!subData || !subData.plan) {
     return false;

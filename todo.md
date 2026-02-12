@@ -289,3 +289,8 @@
 - [x] Calendar now shows local scheduled items for guest users
 - [x] Delete posts works locally for guest users
 - [x] Audit full UI/UX flow for missing steps or dead ends
+
+## Owner Account Setup (v2.9.4)
+- [x] Grant lifetime unlimited access to bradgpowell1123@gmail.com
+- [x] Add owner email check in subscription system (server-side db.ts + client-side use-subscription.ts)
+- [x] Bypass all tier limits for owner account (Vibe tier with all features, unlimited posts, all platforms)
