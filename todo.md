@@ -328,3 +328,16 @@
 - [x] Diagnose why latest build isn't showing up for download
 - [x] Fix any blocking issues preventing APK build (no code issues found - 0 TS errors, web export succeeds, 380 tests pass)
 - [x] Verify checkpoint is accessible and publishable
+
+## UX Flow Overhaul (v2.11) - Simple Linear Content Flow
+- [x] Audit entire create-content flow and identify all dead ends and placeholder alerts
+- [x] Rebuild create-content as simple 4-step linear wizard: Topic → Content → Schedule → Platform → Post
+- [x] Step 1: User enters topic/idea, taps Generate → AI creates content for all 9 platforms
+- [x] Step 2: User reviews generated content with platform tabs, can edit each
+- [x] Step 3: User sets schedule (Post Now toggle or pick date/time with AM/PM picker)
+- [x] Step 4: User selects platform(s) and taps Post Now or Schedule Post
+- [x] Fix Settings screen - removed ALL placeholder alerts, real toggles and navigation
+- [x] Removed confusing options (content type, tone, keywords upfront) - simplified to just topic input
+- [x] Updated Dashboard with prominent Create New Post CTA and clear flow description
+- [x] Every button leads somewhere real - no dead ends
+- [x] 316 tests passing, 0 TypeScript errors

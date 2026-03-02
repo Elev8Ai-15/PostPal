@@ -55,40 +55,6 @@ function MetricCard({ value, label, subtitle, trend, trendValue }: MetricCardPro
   );
 }
 
-interface QuickActionProps {
-  icon: string;
-  title: string;
-  subtitle: string;
-  badge?: number;
-  onPress: () => void;
-}
-
-function QuickAction({ icon, title, subtitle, badge, onPress }: QuickActionProps) {
-  const colors = useColors();
-  
-  return (
-    <TouchableOpacity 
-      className="bg-surface rounded-xl p-4 flex-row items-center border border-border mb-3"
-      onPress={onPress}
-      activeOpacity={0.7}
-    >
-      <View className="bg-primary/10 rounded-full p-3 mr-4">
-        <IconSymbol name={icon as any} size={24} color={colors.primary} />
-      </View>
-      <View className="flex-1">
-        <Text className="text-base font-semibold text-foreground">{title}</Text>
-        <Text className="text-sm text-muted">{subtitle}</Text>
-      </View>
-      {badge !== undefined && badge > 0 && (
-        <View className="bg-primary rounded-full px-2 py-1 min-w-[24px] items-center">
-          <Text className="text-xs font-bold text-background">{badge}</Text>
-        </View>
-      )}
-      <IconSymbol name="chevron.right" size={20} color={colors.muted} style={{ marginLeft: 8 }} />
-    </TouchableOpacity>
-  );
-}
-
 interface ActivityItemProps {
   type: "created" | "approved" | "scheduled" | "published" | "rejected" | "quick_posted";
   title: string;
@@ -138,7 +104,7 @@ function EmptyStateCard() {
       </View>
       <Text className="text-lg font-semibold text-foreground text-center">Welcome to PostPal!</Text>
       <Text className="text-sm text-muted text-center mt-2 mb-4">
-        Start creating AI-powered content to see your metrics and activity here.
+        Create AI-powered content in 4 simple steps: pick a topic, review content, set a schedule, and post.
       </Text>
       <TouchableOpacity
         className="bg-primary px-6 py-3 rounded-full"
@@ -231,8 +197,29 @@ export default function DashboardScreen() {
           <Text className="text-2xl font-bold text-foreground mt-1">Welcome back, {userName}</Text>
         </View>
 
+        {/* Primary CTA - Create Content */}
+        <View className="px-5 mt-4">
+          <TouchableOpacity
+            className="bg-primary rounded-2xl p-5 flex-row items-center"
+            onPress={() => router.push("/create-content")}
+            activeOpacity={0.8}
+            style={styles.createButton}
+          >
+            <View className="bg-background/20 rounded-full p-3 mr-4">
+              <IconSymbol name="sparkles" size={28} color={colors.background} />
+            </View>
+            <View className="flex-1">
+              <Text className="text-lg font-bold text-background">Create New Post</Text>
+              <Text className="text-sm text-background/80 mt-0.5">
+                Topic → Content → Schedule → Post
+              </Text>
+            </View>
+            <IconSymbol name="chevron.right" size={24} color={colors.background} />
+          </TouchableOpacity>
+        </View>
+
         {/* Metrics Section */}
-        <View className="mt-4">
+        <View className="mt-6">
           <Text className="text-lg font-semibold text-foreground px-5 mb-3">Your Activity</Text>
           {showData ? (
             <ScrollView 
@@ -278,31 +265,58 @@ export default function DashboardScreen() {
         {/* Quick Actions */}
         <View className="mt-6 px-5">
           <Text className="text-lg font-semibold text-foreground mb-3">Quick Actions</Text>
-          <QuickAction
-            icon="sparkles"
-            title="Create Content"
-            subtitle="Generate AI-powered posts"
-            onPress={() => router.push("/create-content")}
-          />
-          <QuickAction
-            icon="checkmark.circle.fill"
-            title="Review Content"
-            subtitle={pendingCount > 0 ? `${pendingCount} post${pendingCount > 1 ? "s" : ""} ready for review` : "No pending reviews"}
-            badge={pendingCount}
+          
+          <TouchableOpacity 
+            className="bg-surface rounded-xl p-4 flex-row items-center border border-border mb-3"
             onPress={() => router.push("/(tabs)/approvals")}
-          />
-          <QuickAction
-            icon="calendar"
-            title="View Calendar"
-            subtitle="See your content schedule"
+            activeOpacity={0.7}
+          >
+            <View className="bg-primary/10 rounded-full p-3 mr-4">
+              <IconSymbol name="checkmark.circle.fill" size={24} color={colors.primary} />
+            </View>
+            <View className="flex-1">
+              <Text className="text-base font-semibold text-foreground">Review Content</Text>
+              <Text className="text-sm text-muted">
+                {pendingCount > 0 ? `${pendingCount} post${pendingCount > 1 ? "s" : ""} ready for review` : "No pending reviews"}
+              </Text>
+            </View>
+            {pendingCount > 0 && (
+              <View className="bg-primary rounded-full px-2 py-1 min-w-[24px] items-center mr-2">
+                <Text className="text-xs font-bold text-background">{pendingCount}</Text>
+              </View>
+            )}
+            <IconSymbol name="chevron.right" size={20} color={colors.muted} />
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            className="bg-surface rounded-xl p-4 flex-row items-center border border-border mb-3"
             onPress={() => router.push("/(tabs)/calendar")}
-          />
-          <QuickAction
-            icon="chart.bar.fill"
-            title="View Analytics"
-            subtitle="Check your performance insights"
+            activeOpacity={0.7}
+          >
+            <View className="bg-primary/10 rounded-full p-3 mr-4">
+              <IconSymbol name="calendar" size={24} color={colors.primary} />
+            </View>
+            <View className="flex-1">
+              <Text className="text-base font-semibold text-foreground">View Calendar</Text>
+              <Text className="text-sm text-muted">See your content schedule</Text>
+            </View>
+            <IconSymbol name="chevron.right" size={20} color={colors.muted} />
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            className="bg-surface rounded-xl p-4 flex-row items-center border border-border mb-3"
             onPress={() => router.push("/(tabs)/analytics")}
-          />
+            activeOpacity={0.7}
+          >
+            <View className="bg-primary/10 rounded-full p-3 mr-4">
+              <IconSymbol name="chart.bar.fill" size={24} color={colors.primary} />
+            </View>
+            <View className="flex-1">
+              <Text className="text-base font-semibold text-foreground">View Analytics</Text>
+              <Text className="text-sm text-muted">Check your performance insights</Text>
+            </View>
+            <IconSymbol name="chevron.right" size={20} color={colors.muted} />
+          </TouchableOpacity>
         </View>
 
         {/* Recent Activity */}
@@ -344,5 +358,12 @@ const styles = StyleSheet.create({
   },
   metricCard: {
     width: 200,
+  },
+  createButton: {
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
   },
 });

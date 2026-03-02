@@ -1,12 +1,24 @@
 import { ScrollView, Text, View, TouchableOpacity, Switch, StyleSheet, Alert, Platform } from "react-native";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "expo-router";
+import { useFocusEffect } from "expo-router";
 import { Image } from "expo-image";
 import { ScreenContainer } from "@/components/screen-container";
 import { useAuth } from "@/hooks/use-auth";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
+import { useBrand } from "@/hooks/use-brand";
+import { isApiConfigured } from "@/lib/upload-post-api";
 import * as Haptics from "expo-haptics";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+const SETTINGS_KEY = "postpal_app_settings";
+
+interface AppSettings {
+  pushNotifications: boolean;
+  emailNotifications: boolean;
+  autoApprove: boolean;
+}
 
 interface SettingItemProps {
   icon: string;
@@ -15,9 +27,11 @@ interface SettingItemProps {
   onPress?: () => void;
   rightElement?: React.ReactNode;
   showChevron?: boolean;
+  badge?: string;
+  badgeColor?: string;
 }
 
-function SettingItem({ icon, title, subtitle, onPress, rightElement, showChevron = true }: SettingItemProps) {
+function SettingItem({ icon, title, subtitle, onPress, rightElement, showChevron = true, badge, badgeColor }: SettingItemProps) {
   const colors = useColors();
   
   const content = (
@@ -29,6 +43,11 @@ function SettingItem({ icon, title, subtitle, onPress, rightElement, showChevron
         <Text className="text-base text-foreground">{title}</Text>
         {subtitle && <Text className="text-sm text-muted mt-0.5">{subtitle}</Text>}
       </View>
+      {badge && (
+        <View className="px-2 py-0.5 rounded-full mr-2" style={{ backgroundColor: (badgeColor || colors.success) + "20" }}>
+          <Text className="text-xs font-medium" style={{ color: badgeColor || colors.success }}>{badge}</Text>
+        </View>
+      )}
       {rightElement}
       {showChevron && !rightElement && (
         <IconSymbol name="chevron.right" size={18} color={colors.muted} />
@@ -68,10 +87,50 @@ export default function SettingsScreen() {
   const colors = useColors();
   const router = useRouter();
   const { user, isAuthenticated, logout } = useAuth();
-  const [pushNotifications, setPushNotifications] = useState(true);
-  const [emailNotifications, setEmailNotifications] = useState(true);
-  const [autoApprove, setAutoApprove] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);
+  const { brand, isConfigured: isBrandConfigured } = useBrand();
+  const [settings, setSettings] = useState<AppSettings>({
+    pushNotifications: true,
+    emailNotifications: true,
+    autoApprove: false,
+  });
+  const [uploadPostConnected, setUploadPostConnected] = useState(false);
+
+  // Load settings from AsyncStorage
+  const loadSettings = useCallback(async () => {
+    try {
+      const raw = await AsyncStorage.getItem(SETTINGS_KEY);
+      if (raw) {
+        setSettings(JSON.parse(raw));
+      }
+    } catch (e) {
+      console.error("Failed to load settings:", e);
+    }
+  }, []);
+
+  const checkUploadPost = useCallback(async () => {
+    const configured = await isApiConfigured();
+    setUploadPostConnected(configured);
+  }, []);
+
+  useEffect(() => {
+    loadSettings();
+    checkUploadPost();
+  }, [loadSettings, checkUploadPost]);
+
+  useFocusEffect(
+    useCallback(() => {
+      checkUploadPost();
+    }, [checkUploadPost])
+  );
+
+  const saveSettings = async (newSettings: AppSettings) => {
+    setSettings(newSettings);
+    try {
+      await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(newSettings));
+    } catch (e) {
+      console.error("Failed to save settings:", e);
+    }
+  };
 
   const triggerHaptic = () => {
     if (Platform.OS !== "web") {
@@ -79,14 +138,10 @@ export default function SettingsScreen() {
     }
   };
 
-  const handleToggle = (setter: (value: boolean) => void, currentValue: boolean) => {
+  const handleToggle = (key: keyof AppSettings) => {
     triggerHaptic();
-    setter(!currentValue);
-  };
-
-  const handlePress = (title: string) => {
-    triggerHaptic();
-    Alert.alert(title, `${title} settings would open here.`);
+    const newSettings = { ...settings, [key]: !settings[key] };
+    saveSettings(newSettings);
   };
 
   const handleSignOut = () => {
@@ -128,7 +183,12 @@ export default function SettingsScreen() {
         <View className="px-5 mb-6">
           <TouchableOpacity 
             className="bg-surface rounded-xl p-4 border border-border flex-row items-center"
-            onPress={() => handlePress("Profile")}
+            onPress={() => {
+              triggerHaptic();
+              if (!isAuthenticated) {
+                router.push("/login");
+              }
+            }}
             activeOpacity={0.7}
           >
             <View className="w-16 h-16 rounded-full bg-primary items-center justify-center mr-4">
@@ -143,11 +203,44 @@ export default function SettingsScreen() {
               <Text className="text-sm text-muted">
                 {user?.email || "Not signed in"}
               </Text>
-              <Text className="text-sm text-primary mt-1">View Profile</Text>
+              <Text className="text-sm text-primary mt-1">
+                {isAuthenticated ? "View Profile" : "Sign In"}
+              </Text>
             </View>
             <IconSymbol name="chevron.right" size={20} color={colors.muted} />
           </TouchableOpacity>
         </View>
+
+        {/* My Brand */}
+        <SettingSection title="My Brand">
+          <SettingItem
+            icon="paintbrush"
+            title="Brand Settings"
+            subtitle={isBrandConfigured ? brand.brandName : "Set up your brand for personalized content"}
+            badge={isBrandConfigured ? "Active" : undefined}
+            badgeColor={colors.success}
+            onPress={() => router.push("/my-brand")}
+          />
+        </SettingSection>
+
+        {/* Connected Accounts */}
+        <SettingSection title="Connected Accounts">
+          <SettingItem
+            icon="share"
+            title="Social Accounts"
+            subtitle="Connect Instagram, X, LinkedIn, and more"
+            onPress={() => router.push("/social-accounts")}
+          />
+          <Divider />
+          <SettingItem
+            icon="bolt.fill"
+            title="Upload-Post API"
+            subtitle={uploadPostConnected ? "Connected — real posting enabled" : "Enable one-tap posting to all platforms"}
+            badge={uploadPostConnected ? "Connected" : undefined}
+            badgeColor={uploadPostConnected ? colors.success : undefined}
+            onPress={() => router.push("/upload-post-settings")}
+          />
+        </SettingSection>
 
         {/* Notifications */}
         <SettingSection title="Notifications">
@@ -158,8 +251,8 @@ export default function SettingsScreen() {
             showChevron={false}
             rightElement={
               <Switch
-                value={pushNotifications}
-                onValueChange={() => handleToggle(setPushNotifications, pushNotifications)}
+                value={settings.pushNotifications}
+                onValueChange={() => handleToggle("pushNotifications")}
                 trackColor={{ false: colors.border, true: colors.primary }}
                 thumbColor={colors.background}
               />
@@ -173,8 +266,8 @@ export default function SettingsScreen() {
             showChevron={false}
             rightElement={
               <Switch
-                value={emailNotifications}
-                onValueChange={() => handleToggle(setEmailNotifications, emailNotifications)}
+                value={settings.emailNotifications}
+                onValueChange={() => handleToggle("emailNotifications")}
                 trackColor={{ false: colors.border, true: colors.primary }}
                 thumbColor={colors.background}
               />
@@ -185,28 +278,14 @@ export default function SettingsScreen() {
         {/* Content Preferences */}
         <SettingSection title="Content Preferences">
           <SettingItem
-            icon="calendar"
-            title="Posting Schedule"
-            subtitle="Set your default posting times"
-            onPress={() => handlePress("Posting Schedule")}
-          />
-          <Divider />
-          <SettingItem
-            icon="doc.text"
-            title="Content Types"
-            subtitle="Choose what content to generate"
-            onPress={() => handlePress("Content Types")}
-          />
-          <Divider />
-          <SettingItem
             icon="checkmark.circle.fill"
             title="Auto-Approve Low Risk"
             subtitle="Automatically approve safe content"
             showChevron={false}
             rightElement={
               <Switch
-                value={autoApprove}
-                onValueChange={() => handleToggle(setAutoApprove, autoApprove)}
+                value={settings.autoApprove}
+                onValueChange={() => handleToggle("autoApprove")}
                 trackColor={{ false: colors.border, true: colors.primary }}
                 thumbColor={colors.background}
               />
@@ -231,76 +310,33 @@ export default function SettingsScreen() {
           />
         </SettingSection>
 
-        {/* My Brand */}
-        <SettingSection title="My Brand">
-          <SettingItem
-            icon="paintbrush"
-            title="Brand Settings"
-            subtitle="Personalize AI content with your brand"
-            onPress={() => router.push("/my-brand")}
-          />
-        </SettingSection>
-
-        {/* Connected Accounts */}
-        <SettingSection title="Connected Accounts">
-          <SettingItem
-            icon="share"
-            title="Manage Social Accounts"
-            subtitle="Connect Instagram, Twitter, LinkedIn, and more"
-            onPress={() => router.push("/social-accounts")}
-          />
-          <Divider />
-          <SettingItem
-            icon="bolt.fill"
-            title="Upload-Post API"
-            subtitle="Enable real one-tap posting to all platforms"
-            onPress={() => router.push("/upload-post-settings")}
-          />
-        </SettingSection>
-
-        {/* App Settings */}
-        <SettingSection title="App Settings">
-          <SettingItem
-            icon="eye"
-            title="Dark Mode"
-            subtitle="Switch to dark theme"
-            showChevron={false}
-            rightElement={
-              <Switch
-                value={darkMode}
-                onValueChange={() => handleToggle(setDarkMode, darkMode)}
-                trackColor={{ false: colors.border, true: colors.primary }}
-                thumbColor={colors.background}
-              />
-            }
-          />
-          <Divider />
+        {/* App Info */}
+        <SettingSection title="App">
           <SettingItem
             icon="info.circle"
             title="About PostPal"
             subtitle="Version 1.0.0"
-            onPress={() => handlePress("About")}
-          />
-          <Divider />
-          <SettingItem
-            icon="questionmark.circle"
-            title="Help & Support"
-            onPress={() => handlePress("Help & Support")}
+            showChevron={false}
           />
         </SettingSection>
 
         {/* Sign Out */}
-        <View className="px-5 pb-8">
-          <TouchableOpacity 
-            className="bg-error/10 rounded-xl py-4 items-center"
-            onPress={handleSignOut}
-            activeOpacity={0.7}
-          >
-            <Text className="text-base font-semibold" style={{ color: colors.error }}>
-              Sign Out
-            </Text>
-          </TouchableOpacity>
-        </View>
+        {isAuthenticated && (
+          <View className="px-5 pb-8">
+            <TouchableOpacity 
+              className="bg-error/10 rounded-xl py-4 items-center"
+              onPress={handleSignOut}
+              activeOpacity={0.7}
+            >
+              <Text className="text-base font-semibold" style={{ color: colors.error }}>
+                Sign Out
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Bottom padding */}
+        <View style={{ height: 40 }} />
       </ScrollView>
     </ScreenContainer>
   );

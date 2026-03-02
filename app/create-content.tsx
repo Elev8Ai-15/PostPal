@@ -7,208 +7,204 @@ import { useColors } from "@/hooks/use-colors";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubscription } from "@/hooks/use-subscription";
 import { trpc } from "@/lib/trpc";
-import { HashtagSuggestions } from "@/components/hashtag-suggestions";
-import { PlatformPreview } from "@/components/platform-preview";
-import { SubredditSuggestions } from "@/components/subreddit-suggestions";
 import * as Haptics from "expo-haptics";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { postToMultiplePlatforms, getConnectedPlatforms, type SocialPlatform as PostingSocialPlatform } from "@/lib/social-posting";
 import { copyAndOpenApp, PLATFORM_CONFIGS, type SocialPlatform as SimplePlatform } from "@/lib/simple-posting";
 import { logActivity, incrementStat, logQuickPost } from "@/lib/content-store";
 import { useBrand } from "@/hooks/use-brand";
 import { isApiConfigured, postText, type MultiPostResult } from "@/lib/upload-post-api";
 
-type ContentType = "social" | "blog" | "newsletter" | "video";
-type SocialPlatform = "instagram" | "twitter" | "linkedin" | "facebook" | "youtube" | "tiktok" | "reddit" | "email" | "blog";
-type Tone = "professional" | "casual" | "friendly" | "authoritative" | "humorous";
-
-interface ContentTypeOption {
-  id: ContentType;
-  name: string;
-  icon: string;
-}
+// ─── Types ───────────────────────────────────────────────────────────────────
+type SocialPlatform = "instagram" | "twitter" | "linkedin" | "facebook" | "youtube" | "tiktok" | "reddit" | "threads" | "pinterest" | "bluesky";
 
 interface PlatformOption {
   id: SocialPlatform;
   name: string;
   icon: string;
-  charLimit?: number;
-  hashtagLimit?: number;
+  charLimit: number;
 }
 
-interface ToneOption {
-  id: Tone;
-  name: string;
-}
-
-const CONTENT_TYPES: ContentTypeOption[] = [
-  { id: "social", name: "Social Post", icon: "message" },
-  { id: "blog", name: "Blog Article", icon: "doc.text" },
-  { id: "newsletter", name: "Newsletter", icon: "envelope" },
-  { id: "video", name: "Video Script", icon: "video" },
-];
-
+// ─── Constants ───────────────────────────────────────────────────────────────
 const PLATFORMS: PlatformOption[] = [
-  { id: "instagram", name: "Instagram", icon: "camera", charLimit: 2200, hashtagLimit: 30 },
-  { id: "twitter", name: "Twitter/X", icon: "message", charLimit: 280, hashtagLimit: 5 },
-  { id: "linkedin", name: "LinkedIn", icon: "person.fill", charLimit: 3000, hashtagLimit: 5 },
-  { id: "facebook", name: "Facebook", icon: "person.fill", charLimit: 63206, hashtagLimit: 10 },
-  { id: "youtube", name: "YouTube", icon: "video", charLimit: 5000, hashtagLimit: 15 },
-  { id: "tiktok", name: "TikTok", icon: "video", charLimit: 2200, hashtagLimit: 5 },
-  { id: "reddit", name: "Reddit", icon: "message", charLimit: 40000, hashtagLimit: 0 },
-  { id: "email", name: "Email", icon: "envelope" },
-  { id: "blog", name: "Blog", icon: "doc.text" },
+  { id: "instagram", name: "Instagram", icon: "camera.fill", charLimit: 2200 },
+  { id: "twitter", name: "X (Twitter)", icon: "at", charLimit: 280 },
+  { id: "linkedin", name: "LinkedIn", icon: "briefcase.fill", charLimit: 3000 },
+  { id: "facebook", name: "Facebook", icon: "person.2.fill", charLimit: 63206 },
+  { id: "tiktok", name: "TikTok", icon: "music.note", charLimit: 2200 },
+  { id: "youtube", name: "YouTube", icon: "play.rectangle.fill", charLimit: 5000 },
+  { id: "reddit", name: "Reddit", icon: "bubble.left.fill", charLimit: 40000 },
+  { id: "threads", name: "Threads", icon: "at", charLimit: 500 },
+  { id: "bluesky", name: "Bluesky", icon: "cloud.fill", charLimit: 300 },
 ];
 
-const TONES: ToneOption[] = [
-  { id: "professional", name: "Professional" },
-  { id: "casual", name: "Casual" },
-  { id: "friendly", name: "Friendly" },
-  { id: "authoritative", name: "Authoritative" },
-  { id: "humorous", name: "Humorous" },
-];
-
-// Platform-specific formatting rules
-const PLATFORM_FORMATTING: Record<string, { prefix?: string; suffix?: string; style: string }> = {
-  instagram: { style: "Visual-focused with emojis, line breaks for readability" },
-  twitter: { style: "Concise, punchy, thread-friendly if needed" },
-  linkedin: { style: "Professional, thought-leadership focused, no excessive emojis" },
-  facebook: { style: "Conversational, community-focused, can be longer" },
-  youtube: { style: "SEO-optimized description with timestamps" },
-  tiktok: { style: "Video-first, trending sounds/hooks, Gen-Z friendly, use trending hashtags" },
-  reddit: { style: "Authentic, community-first, no promotional language, subreddit-aware" },
+const PLATFORM_FORMATTING: Record<string, string> = {
+  instagram: "Visual-focused with emojis, line breaks for readability",
+  twitter: "Concise, punchy, thread-friendly if needed",
+  linkedin: "Professional, thought-leadership focused",
+  facebook: "Conversational, community-focused",
+  youtube: "SEO-optimized description with timestamps",
+  tiktok: "Video-first, trending hooks, Gen-Z friendly",
+  reddit: "Authentic, community-first, no promotional language",
+  threads: "Short, conversational, casual",
+  bluesky: "Concise, community-oriented",
 };
 
-// Local content generation for guest users (no server needed)
+// ─── Local content generation for guest users ────────────────────────────────
 function generateLocalContent(params: {
-  contentType: ContentType;
   platform: string;
   topic: string;
-  tone: string;
-  keywords: string[];
-  formatting: string;
-  charLimit?: number;
   brandName?: string;
   brandTagline?: string;
-}): { content: string; hashtags: string[]; title: string; callToAction: string } {
-  const { contentType, platform, topic, tone, keywords, charLimit, brandName, brandTagline } = params;
-  const keywordStr = keywords.length > 0 ? keywords.join(", ") : "";
+}): { content: string; hashtags: string[] } {
+  const { platform, topic, brandName, brandTagline } = params;
   const brandSuffix = brandName ? `\n\n— ${brandName}${brandTagline ? ` | ${brandTagline}` : ""}` : "";
-  
-  const toneStyles: Record<string, { opener: string; style: string }> = {
-    professional: { opener: "Here's what you need to know about", style: "data-driven and insightful" },
-    casual: { opener: "Let's talk about", style: "relaxed and approachable" },
-    friendly: { opener: "Hey! Let's dive into", style: "warm and inviting" },
-    authoritative: { opener: "The definitive guide to", style: "expert and commanding" },
-    humorous: { opener: "Plot twist:", style: "witty and entertaining" },
-  };
-  
-  const ts = toneStyles[tone] || toneStyles.professional;
-  
-  const platformContent: Record<string, () => { content: string; hashtags: string[] }> = {
+
+  const generators: Record<string, () => { content: string; hashtags: string[] }> = {
     instagram: () => ({
-      content: `${ts.opener} ${topic}! \u2728\n\n${keywordStr ? `When it comes to ${keywordStr}, ` : ""}This is a game-changer for anyone looking to level up.\n\n\u2714\uFE0F Key insight: ${topic} is transforming how we think about success\n\u2714\uFE0F Pro tip: Start small, think big, and stay consistent\n\u2714\uFE0F Remember: Every expert was once a beginner\n\nDouble tap if you agree! \u{1F44D} Drop a \u{1F525} in the comments if you're ready to take action.\n\n#${topic.replace(/\s+/g, "")} #ContentCreator #GrowthMindset`,
-      hashtags: [topic.replace(/\s+/g, ""), "ContentCreator", "GrowthMindset", "DigitalMarketing", "Success", ...keywords.map(k => k.replace(/\s+/g, ""))].slice(0, 15),
+      content: `Let's talk about ${topic}! ✨\n\nThis is a game-changer for anyone looking to level up.\n\n✔️ Key insight: ${topic} is transforming how we think about success\n✔️ Pro tip: Start small, think big, and stay consistent\n✔️ Remember: Every expert was once a beginner\n\nDouble tap if you agree! 👍 Drop a 🔥 in the comments if you're ready to take action.${brandSuffix}`,
+      hashtags: [topic.replace(/\s+/g, ""), "ContentCreator", "GrowthMindset", "DigitalMarketing", "Success"],
     }),
     twitter: () => ({
-      content: `${ts.opener} ${topic}:\n\n${keywordStr ? `${keywordStr} are reshaping the landscape. ` : ""}Here's the thing most people miss \u{1F447}\n\nThe key to success isn't just knowing about ${topic} \u2014 it's taking action on it TODAY.\n\nRT if you agree \u{1F504}`,
-      hashtags: [topic.replace(/\s+/g, ""), ...keywords.map(k => k.replace(/\s+/g, ""))].slice(0, 5),
+      content: `Let's talk about ${topic}:\n\nHere's the thing most people miss 👇\n\nThe key to success isn't just knowing about ${topic} — it's taking action on it TODAY.\n\nRT if you agree 🔄${brandSuffix}`,
+      hashtags: [topic.replace(/\s+/g, "")],
     }),
     linkedin: () => ({
-      content: `${ts.opener} ${topic}.\n\n${keywordStr ? `In the world of ${keywordStr}, ` : ""}I've been reflecting on how ${topic} is reshaping our industry.\n\nHere are 3 key takeaways:\n\n1. Innovation starts with understanding the fundamentals\n2. The most successful professionals embrace continuous learning\n3. Collaboration and authentic networking drive real results\n\nWhat's your experience with ${topic}? I'd love to hear your perspective in the comments.\n\n#${topic.replace(/\s+/g, "")} #ProfessionalDevelopment #ThoughtLeadership`,
-      hashtags: [topic.replace(/\s+/g, ""), "ProfessionalDevelopment", "ThoughtLeadership", "Innovation", ...keywords.map(k => k.replace(/\s+/g, ""))].slice(0, 5),
+      content: `I've been reflecting on how ${topic} is reshaping our industry.\n\nHere are 3 key takeaways:\n\n1. Innovation starts with understanding the fundamentals\n2. The most successful professionals embrace continuous learning\n3. Collaboration and authentic networking drive real results\n\nWhat's your experience with ${topic}? I'd love to hear your perspective in the comments.${brandSuffix}`,
+      hashtags: [topic.replace(/\s+/g, ""), "ProfessionalDevelopment", "ThoughtLeadership"],
     }),
     facebook: () => ({
-      content: `${ts.opener} ${topic}! \u{1F680}\n\n${keywordStr ? `If you're interested in ${keywordStr}, ` : ""}This is something I'm really passionate about and I wanted to share my thoughts with you all.\n\n${topic} has the power to transform the way we approach our goals. Whether you're just starting out or you're a seasoned pro, there's always something new to learn.\n\nWhat do you think? Share your thoughts below! \u{1F447}\n\nLike & Share if this resonates with you! \u2764\uFE0F`,
-      hashtags: [topic.replace(/\s+/g, ""), ...keywords.map(k => k.replace(/\s+/g, ""))].slice(0, 5),
+      content: `Let's talk about ${topic}! 🚀\n\nThis is something I'm really passionate about and I wanted to share my thoughts with you all.\n\n${topic} has the power to transform the way we approach our goals. Whether you're just starting out or you're a seasoned pro, there's always something new to learn.\n\nWhat do you think? Share your thoughts below! 👇\n\nLike & Share if this resonates with you! ❤️${brandSuffix}`,
+      hashtags: [topic.replace(/\s+/g, "")],
     }),
     tiktok: () => ({
-      content: `\u{1F6A8} STOP SCROLLING \u{1F6A8}\n\n${ts.opener} ${topic}...\n\n${keywordStr ? `${keywordStr} are about to blow up and here's why \u{1F447}` : "Here's what nobody is telling you \u{1F447}"}\n\nThis is the sign you've been waiting for. ${topic} is YOUR moment.\n\nFollow for more \u{1F525}\n\n#${topic.replace(/\s+/g, "")} #FYP #Viral #LearnOnTikTok`,
-      hashtags: [topic.replace(/\s+/g, ""), "FYP", "Viral", "LearnOnTikTok", "Trending", ...keywords.map(k => k.replace(/\s+/g, ""))].slice(0, 8),
+      content: `🚨 STOP SCROLLING 🚨\n\nLet's talk about ${topic}...\n\nHere's what nobody is telling you 👇\n\nThis is the sign you've been waiting for. ${topic} is YOUR moment.\n\nFollow for more 🔥${brandSuffix}`,
+      hashtags: [topic.replace(/\s+/g, ""), "FYP", "Viral", "LearnOnTikTok"],
     }),
     youtube: () => ({
-      content: `${topic} - The Complete Guide\n\n${keywordStr ? `Covering: ${keywordStr}\n\n` : ""}In this video, we dive deep into ${topic} and break down everything you need to know.\n\n\u23F0 Timestamps:\n0:00 - Introduction\n1:30 - Why ${topic} matters\n3:00 - Key strategies\n5:00 - Common mistakes to avoid\n7:00 - Action steps\n9:00 - Final thoughts\n\n\u{1F514} Subscribe and hit the bell for more content like this!\n\n#${topic.replace(/\s+/g, "")} #YouTube`,
-      hashtags: [topic.replace(/\s+/g, ""), "YouTube", ...keywords.map(k => k.replace(/\s+/g, ""))].slice(0, 10),
+      content: `${topic} - The Complete Guide\n\nIn this video, we dive deep into ${topic} and break down everything you need to know.\n\n⏰ Timestamps:\n0:00 - Introduction\n1:30 - Why ${topic} matters\n3:00 - Key strategies\n5:00 - Common mistakes to avoid\n7:00 - Action steps\n\n🔔 Subscribe and hit the bell for more content like this!${brandSuffix}`,
+      hashtags: [topic.replace(/\s+/g, ""), "YouTube"],
     }),
     reddit: () => ({
-      content: `${topic} - Thoughts and Discussion\n\n${keywordStr ? `I've been looking into ${keywordStr} and ` : ""}I wanted to share some thoughts on ${topic} and get the community's perspective.\n\nHere's what I've found:\n\n- The landscape is changing rapidly\n- There are some really interesting developments happening\n- Most people are overlooking key aspects\n\nWhat's your experience? Has anyone else noticed these trends?\n\nWould love to hear different viewpoints on this.`,
+      content: `${topic} - Thoughts and Discussion\n\nI wanted to share some thoughts on ${topic} and get the community's perspective.\n\nHere's what I've found:\n\n- The landscape is changing rapidly\n- There are some really interesting developments happening\n- Most people are overlooking key aspects\n\nWhat's your experience? Has anyone else noticed these trends?\n\nWould love to hear different viewpoints on this.${brandSuffix}`,
       hashtags: [],
     }),
-    email: () => ({
-      content: `Subject: ${topic} - What You Need to Know\n\nHi there,\n\n${ts.opener} ${topic}.\n\n${keywordStr ? `When it comes to ${keywordStr}, ` : ""}There are some exciting developments I wanted to share with you.\n\nKey Highlights:\n\u2022 New insights that could change your approach\n\u2022 Practical tips you can implement today\n\u2022 Resources to help you get started\n\nReady to learn more? Click below to dive in.\n\n[Call to Action Button]\n\nBest regards,\nYour Team`,
-      hashtags: [],
+    threads: () => ({
+      content: `Hot take on ${topic}:\n\nMost people are overthinking this. The key? Just start.\n\n${topic} isn't rocket science — it's about consistency and showing up every day.${brandSuffix}`,
+      hashtags: [topic.replace(/\s+/g, "")],
     }),
-    blog: () => ({
-      content: `# ${topic}: A Comprehensive Guide\n\n${keywordStr ? `*Keywords: ${keywordStr}*\n\n` : ""}## Introduction\n\n${topic} is one of the most important topics in today's landscape. Whether you're a beginner or an experienced professional, understanding the nuances can give you a significant advantage.\n\n## Why ${topic} Matters\n\nIn an ever-evolving world, staying ahead means embracing new ideas and approaches. ${topic} represents a shift in how we think about success and growth.\n\n## Key Strategies\n\n### 1. Start with the Fundamentals\nBefore diving into advanced techniques, make sure you have a solid foundation.\n\n### 2. Stay Consistent\nConsistency is the key to long-term success in any endeavor.\n\n### 3. Measure and Adapt\nTrack your progress and be willing to adjust your approach based on results.\n\n## Conclusion\n\n${topic} is more than just a trend \u2014 it's a fundamental shift in how we approach our goals. Start implementing these strategies today and watch the results unfold.\n\n*What are your thoughts on ${topic}? Share in the comments below!*`,
+    bluesky: () => ({
+      content: `Thinking about ${topic} today. The key insight most people miss: consistency beats perfection every time.${brandSuffix}`,
       hashtags: [],
     }),
   };
-  
-  const generator = platformContent[platform] || platformContent.instagram;
-  const generated = generator();
-  
-  // Trim content to character limit if needed
-  if (charLimit && generated.content.length > charLimit) {
-    generated.content = generated.content.substring(0, charLimit - 3) + "...";
-  }
-  
-  return {
-    ...generated,
-    title: `Campaign: ${topic.substring(0, 50)}`,
-    callToAction: `Learn more about ${topic}`,
-  };
+
+  const gen = generators[platform] || generators.instagram;
+  return gen();
 }
 
+// ─── Step indicator component ────────────────────────────────────────────────
+function StepIndicator({ currentStep, totalSteps }: { currentStep: number; totalSteps: number }) {
+  const colors = useColors();
+  const stepLabels = ["Topic", "Content", "Schedule", "Post"];
+
+  return (
+    <View className="flex-row items-center justify-center px-5 py-3">
+      {stepLabels.map((label, index) => {
+        const stepNum = index + 1;
+        const isActive = stepNum === currentStep;
+        const isCompleted = stepNum < currentStep;
+
+        return (
+          <View key={label} className="flex-row items-center">
+            <View className="items-center">
+              <View
+                className="w-8 h-8 rounded-full items-center justify-center"
+                style={{
+                  backgroundColor: isActive ? colors.primary : isCompleted ? colors.success : colors.surface,
+                  borderWidth: 1.5,
+                  borderColor: isActive ? colors.primary : isCompleted ? colors.success : colors.border,
+                }}
+              >
+                {isCompleted ? (
+                  <IconSymbol name="checkmark" size={14} color={colors.background} />
+                ) : (
+                  <Text
+                    className="text-xs font-bold"
+                    style={{ color: isActive ? colors.background : colors.muted }}
+                  >
+                    {stepNum}
+                  </Text>
+                )}
+              </View>
+              <Text
+                className="text-xs mt-1"
+                style={{ color: isActive ? colors.primary : isCompleted ? colors.success : colors.muted, fontWeight: isActive ? "600" : "400" }}
+              >
+                {label}
+              </Text>
+            </View>
+            {index < stepLabels.length - 1 && (
+              <View
+                className="mx-2"
+                style={{
+                  width: 24,
+                  height: 2,
+                  backgroundColor: isCompleted ? colors.success : colors.border,
+                  marginBottom: 16,
+                }}
+              />
+            )}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+// ─── Main Component ──────────────────────────────────────────────────────────
 export default function CreateContentScreen() {
   const colors = useColors();
   const router = useRouter();
   const { isAuthenticated } = useAuth();
-  const { limits, canPost, postLimitReason, canUsePlatforms, hasFeature } = useSubscription();
-  
-  const [contentType, setContentType] = useState<ContentType>("social");
-  const [selectedPlatforms, setSelectedPlatforms] = useState<SocialPlatform[]>(["instagram"]);
-  const [tone, setTone] = useState<Tone>("professional");
-  const [topic, setTopic] = useState("");
-  const [keywords, setKeywords] = useState("");
-  const [selectedHashtags, setSelectedHashtags] = useState<string[]>([]);
-  // Reddit subreddit targeting
-  const [targetSubreddits, setTargetSubreddits] = useState<string[]>([]);
-  const [subredditInput, setSubredditInput] = useState("");
-  const [suggestedSubreddits, setSuggestedSubreddits] = useState<string[]>([]);
-  const [showPreview, setShowPreview] = useState(false);
-  const [previewPlatform, setPreviewPlatform] = useState<SocialPlatform>("instagram");
-  const [generatedContent, setGeneratedContent] = useState<{
-    title: string;
-    content: string;
-    hashtags?: string[];
-    callToAction?: string;
-    platformVersions?: Record<string, { content: string; hashtags: string[] }>;
-  } | null>(null);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isPosting, setIsPosting] = useState(false);
-  const [connectedPlatforms, setConnectedPlatforms] = useState<PostingSocialPlatform[]>([]);
-  const [isContentExpanded, setIsContentExpanded] = useState(true); // Default expanded to show full content
-  const [isEditing, setIsEditing] = useState(false);
-  const [editedContent, setEditedContent] = useState<string>("");
-  // Quick Post edit-before-posting modal
-  const [quickPostPlatform, setQuickPostPlatform] = useState<SimplePlatform | null>(null);
-  const [quickPostContent, setQuickPostContent] = useState<string>("");
-  const [showQuickPostEditor, setShowQuickPostEditor] = useState(false);
-  const [uploadPostEnabled, setUploadPostEnabled] = useState(false);
-  const [uploadPostResult, setUploadPostResult] = useState<MultiPostResult | null>(null);
-  const scrollViewRef = useRef<ScrollView>(null);
+  const { limits, canUsePlatforms } = useSubscription();
   const { brand, isConfigured: isBrandConfigured, getBrandContext } = useBrand();
+  const scrollViewRef = useRef<ScrollView>(null);
 
-  // Load connected platforms on mount
-  const loadConnectedPlatforms = async () => {
-    const connected = await getConnectedPlatforms();
-    setConnectedPlatforms(connected);
-  };
+  // Wizard state
+  const [step, setStep] = useState(1); // 1=Topic, 2=Content, 3=Schedule, 4=Post
 
-  // Check connected platforms and Upload-Post API status on mount
+  // Step 1: Topic
+  const [topic, setTopic] = useState("");
+
+  // Step 2: Generated content (per platform)
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generatedContent, setGeneratedContent] = useState<Record<string, { content: string; hashtags: string[] }>>({});
+  const [isEditing, setIsEditing] = useState(false);
+  const [editText, setEditText] = useState("");
+  const [editPlatform, setEditPlatform] = useState("");
+
+  // Step 3: Schedule
+  const [scheduleDate, setScheduleDate] = useState<Date>(new Date());
+  const [scheduleHour, setScheduleHour] = useState(9);
+  const [scheduleMinute, setScheduleMinute] = useState(0);
+  const [schedulePeriod, setSchedulePeriod] = useState<"AM" | "PM">("AM");
+  const [postNow, setPostNow] = useState(true); // Default to "Post Now"
+
+  // Step 4: Platform selection
+  const [selectedPlatforms, setSelectedPlatforms] = useState<SocialPlatform[]>([]);
+
+  // Posting state
+  const [isPosting, setIsPosting] = useState(false);
+  const [uploadPostEnabled, setUploadPostEnabled] = useState(false);
+
+  // Quick post editor modal
+  const [quickPostPlatform, setQuickPostPlatform] = useState<SimplePlatform | null>(null);
+  const [quickPostContent, setQuickPostContent] = useState("");
+  const [showQuickPostEditor, setShowQuickPostEditor] = useState(false);
+
+  const generateMutation = trpc.ai.generateContent.useMutation();
+
   useEffect(() => {
-    loadConnectedPlatforms();
     checkUploadPostStatus();
   }, []);
 
@@ -217,1176 +213,791 @@ export default function CreateContentScreen() {
     setUploadPostEnabled(configured);
   };
 
-  const generateMutation = trpc.ai.generateContent.useMutation();
-  const createPostMutation = trpc.posts.create.useMutation();
-
   const triggerHaptic = () => {
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
   };
 
-  const handlePlatformToggle = (platformId: SocialPlatform) => {
-    triggerHaptic();
-    setSelectedPlatforms(prev => {
-      if (prev.includes(platformId)) {
-        // Don't allow deselecting if it's the only one
-        if (prev.length === 1) return prev;
-        return prev.filter(p => p !== platformId);
-      } else {
-        // Check subscription limit
-        if (!canUsePlatforms(prev.length + 1)) {
-          Alert.alert(
-            "Platform Limit",
-            `You can select up to ${limits.maxPlatforms} platforms. Deselect one first, or upgrade your plan for more.`,
-            [
-              { text: "OK", style: "cancel" },
-              { text: "Upgrade", onPress: () => router.push("/subscription") },
-            ]
-          );
-          return prev;
-        }
-        return [...prev, platformId];
-      }
-    });
+  const scrollToTop = () => {
+    setTimeout(() => scrollViewRef.current?.scrollTo({ y: 0, animated: true }), 100);
   };
 
-  const handleSelectAllPlatforms = () => {
-    triggerHaptic();
-    const availablePlatforms = getAvailablePlatforms();
-    if (selectedPlatforms.length === availablePlatforms.length || selectedPlatforms.length >= limits.maxPlatforms) {
-      // If all selected or at limit, select only the first one
-      setSelectedPlatforms([availablePlatforms[0].id]);
-    } else {
-      // Select up to the subscription limit
-      const maxToSelect = Math.min(availablePlatforms.length, limits.maxPlatforms);
-      setSelectedPlatforms(availablePlatforms.slice(0, maxToSelect).map(p => p.id));
-      
-      if (availablePlatforms.length > limits.maxPlatforms) {
-        Alert.alert(
-          "Platform Limit",
-          `Your plan allows ${limits.maxPlatforms} platform(s). Upgrade for more!`,
-          [
-            { text: "OK" },
-            { text: "Upgrade", onPress: () => router.push("/subscription") },
-          ]
-        );
-      }
-    }
-  };
-
-  const getAvailablePlatforms = () => {
-    return PLATFORMS.filter(p => {
-      if (contentType === "social") return ["instagram", "twitter", "linkedin", "facebook", "reddit", "tiktok", "youtube"].includes(p.id);
-      if (contentType === "video") return ["youtube", "tiktok"].includes(p.id);
-      if (contentType === "newsletter") return p.id === "email";
-      if (contentType === "blog") return p.id === "blog";
-      return true;
-    });
-  };
-
-  const handleHashtagToggle = (hashtag: string) => {
-    triggerHaptic();
-    setSelectedHashtags(prev => 
-      prev.includes(hashtag) 
-        ? prev.filter(h => h !== hashtag)
-        : [...prev, hashtag]
-    );
-  };
-
+  // ─── Step 1: Generate content ──────────────────────────────────────────────
   const handleGenerate = async () => {
     if (!topic.trim()) {
-      Alert.alert("Topic Required", "Please enter a topic for your content.");
+      Alert.alert("Topic Required", "Please enter a topic or idea for your content.");
       return;
     }
-
-    if (selectedPlatforms.length === 0) {
-      Alert.alert("Platform Required", "Please select at least one platform.");
-      return;
-    }
-
-    // Guest users can generate content - it's saved locally
-    // Authentication only required for cloud sync features
 
     triggerHaptic();
     setIsGenerating(true);
-    setGeneratedContent(null);
-    setSelectedHashtags([]);
 
     try {
-      // Generate content for each selected platform
-      const platformVersions: Record<string, { content: string; hashtags: string[] }> = {};
-      
-      for (const platformId of selectedPlatforms) {
-        const platformInfo = PLATFORMS.find(p => p.id === platformId);
-        const formatting = PLATFORM_FORMATTING[platformId];
-        
-        let result: { content: string; hashtags?: string[]; title?: string; callToAction?: string };
-        
+      // Generate content for ALL platforms at once
+      const results: Record<string, { content: string; hashtags: string[] }> = {};
+
+      for (const platform of PLATFORMS) {
+        const brandContext = isBrandConfigured ? getBrandContext() : undefined;
+
         if (isAuthenticated) {
-          // Use server AI generation for authenticated users
-          // Include brand context if configured
-          const brandContext = isBrandConfigured ? getBrandContext() : undefined;
-          result = await generateMutation.mutateAsync({
-            contentType,
-            platform: platformId,
-            topic: topic.trim(),
-            tone,
-            keywords: keywords ? keywords.split(",").map(k => k.trim()).filter(Boolean) : undefined,
-            brandContext,
-          });
+          try {
+            const result = await generateMutation.mutateAsync({
+              contentType: "social",
+              platform: platform.id as any,
+              topic: topic.trim(),
+              tone: "professional",
+              brandContext,
+            });
+            results[platform.id] = {
+              content: result.content,
+              hashtags: result.hashtags || [],
+            };
+          } catch {
+            // Fallback to local generation if server fails
+            results[platform.id] = generateLocalContent({
+              platform: platform.id,
+              topic: topic.trim(),
+              brandName: isBrandConfigured ? brand.brandName : undefined,
+              brandTagline: isBrandConfigured ? brand.tagline : undefined,
+            });
+          }
         } else {
-          // Local template-based generation for guest users
-          result = generateLocalContent({
-            contentType,
-            platform: platformId,
+          results[platform.id] = generateLocalContent({
+            platform: platform.id,
             topic: topic.trim(),
-            tone,
-            keywords: keywords ? keywords.split(",").map(k => k.trim()).filter(Boolean) : [],
-            formatting: formatting?.style || "",
-            charLimit: platformInfo?.charLimit,
             brandName: isBrandConfigured ? brand.brandName : undefined,
             brandTagline: isBrandConfigured ? brand.tagline : undefined,
           });
         }
-
-        platformVersions[platformId] = {
-          content: result.content,
-          hashtags: result.hashtags || [],
-        };
       }
 
-      // Use the first platform's content as the main display
-      const firstPlatform = selectedPlatforms[0];
-      const firstResult = platformVersions[firstPlatform];
-      
-      setGeneratedContent({
-        title: `Campaign: ${topic.trim().substring(0, 50)}`,
-        content: firstResult.content,
-        hashtags: firstResult.hashtags,
-        platformVersions,
-      });
-      
-      // Auto-select generated hashtags from first platform
-      if (firstResult.hashtags) {
-        setSelectedHashtags(firstResult.hashtags);
-      }
-      
-      setPreviewPlatform(firstPlatform);
-      setIsEditing(false); // Reset editing state
-      
-      // Log activity and increment stats
-      await incrementStat("created", firstPlatform);
-      await logActivity({
-        type: "created",
-        title: `${topic.trim().substring(0, 50)}`,
-        platform: firstPlatform,
-      });
-      
+      setGeneratedContent(results);
+      await incrementStat("created", "instagram");
+      await logActivity({ type: "created", title: topic.trim().substring(0, 50), platform: "instagram" as any });
+
       if (Platform.OS !== "web") {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
-      
-      // Auto-scroll to show generated content
-      setTimeout(() => {
-        scrollViewRef.current?.scrollToEnd({ animated: true });
-      }, 300);
+
+      // Move to Step 2
+      setStep(2);
+      scrollToTop();
     } catch (error) {
       console.error("Generation error:", error);
       Alert.alert("Error", "Failed to generate content. Please try again.");
-      if (Platform.OS !== "web") {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      }
     } finally {
       setIsGenerating(false);
     }
   };
 
-  const getContentForPlatform = (platformId: SocialPlatform) => {
-    if (!generatedContent?.platformVersions) return generatedContent?.content || "";
-    return generatedContent.platformVersions[platformId]?.content || generatedContent.content;
+  // ─── Step 3: Schedule helpers ──────────────────────────────────────────────
+  const getScheduleDateTime = (): Date => {
+    const d = new Date(scheduleDate);
+    let hour = scheduleHour;
+    if (schedulePeriod === "PM" && hour !== 12) hour += 12;
+    if (schedulePeriod === "AM" && hour === 12) hour = 0;
+    d.setHours(hour, scheduleMinute, 0, 0);
+    return d;
   };
 
-  const getHashtagsForPlatform = (platformId: SocialPlatform) => {
-    if (!generatedContent?.platformVersions) return selectedHashtags;
-    return generatedContent.platformVersions[platformId]?.hashtags || selectedHashtags;
+  const formatScheduleDisplay = (): string => {
+    const d = getScheduleDateTime();
+    return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) +
+      " at " +
+      d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
   };
 
-  const getFullContent = (platformId?: SocialPlatform) => {
-    const pid = platformId || selectedPlatforms[0];
-    const content = getContentForPlatform(pid);
-    const hashtags = getHashtagsForPlatform(pid);
-    
-    // Reddit doesn't use hashtags
-    if (pid === "reddit") return content;
-    
-    const hashtagString = hashtags.length > 0 
-      ? `\n\n${hashtags.map(h => `#${h}`).join(" ")}`
-      : "";
-    return content + hashtagString;
-  };
-
-  // Save content locally for guest users
-  const saveLocally = async () => {
-    if (!generatedContent) return;
-    
-    try {
-      // Get existing local drafts
-      const existingDrafts = await AsyncStorage.getItem("postpal_local_drafts");
-      const drafts = existingDrafts ? JSON.parse(existingDrafts) : [];
-      
-      // Add new drafts for each platform
-      for (const platformId of selectedPlatforms) {
-        const newDraft = {
-          id: `local_${Date.now()}_${platformId}`,
-          title: generatedContent.title,
-          content: getFullContent(platformId),
-          contentType,
-          platform: platformId,
-          createdAt: new Date().toISOString(),
-          aiGenerated: true,
-        };
-        drafts.push(newDraft);
+  // ─── Step 4: Platform toggle ───────────────────────────────────────────────
+  const handlePlatformToggle = (platformId: SocialPlatform) => {
+    triggerHaptic();
+    setSelectedPlatforms((prev) => {
+      if (prev.includes(platformId)) {
+        return prev.filter((p) => p !== platformId);
       }
-      
-      await AsyncStorage.setItem("postpal_local_drafts", JSON.stringify(drafts));
-      
-      // Log activity
-      await logActivity({
-        type: "created",
-        title: generatedContent.title,
-        platform: selectedPlatforms[0],
-      });
-      
-      const platformCount = selectedPlatforms.length;
-      Alert.alert(
-        "Saved Locally!",
-        `Your content has been saved to this device (${platformCount} draft${platformCount > 1 ? "s" : ""}). Sign in anytime to sync to cloud.`,
-        [{ text: "OK", onPress: () => router.back() }]
-      );
-    } catch (error) {
-      Alert.alert("Error", "Failed to save locally. Please try again.");
-    }
-  };
-
-  const handleSaveAsDraft = async () => {
-    if (!generatedContent) return;
-
-    // For guest users, show option to save locally or sign in
-    if (!isAuthenticated) {
-      Alert.alert(
-        "Save Options",
-        "Sign in to save to cloud, or continue as guest to save locally on this device.",
-        [
-          { text: "Continue as Guest", onPress: () => saveLocally() },
-          { text: "Sign In", onPress: () => router.push("/login") },
-        ]
-      );
-      return;
-    }
-
-    // Check post limit
-    if (!canPost) {
-      Alert.alert(
-        "Post Limit Reached",
-        postLimitReason || "You've reached your weekly post limit. Upgrade to post more!",
-        [
-          { text: "Cancel", style: "cancel" },
+      if (!canUsePlatforms(prev.length + 1)) {
+        Alert.alert("Platform Limit", `Your plan allows ${limits.maxPlatforms} platform(s). Upgrade for more.`, [
+          { text: "OK" },
           { text: "Upgrade", onPress: () => router.push("/subscription") },
-        ]
-      );
+        ]);
+        return prev;
+      }
+      return [...prev, platformId];
+    });
+  };
+
+  const handleSelectAll = () => {
+    triggerHaptic();
+    if (selectedPlatforms.length === PLATFORMS.length) {
+      setSelectedPlatforms([]);
+    } else {
+      const max = Math.min(PLATFORMS.length, limits.maxPlatforms);
+      setSelectedPlatforms(PLATFORMS.slice(0, max).map((p) => p.id));
+    }
+  };
+
+  // ─── Final: Post / Schedule ────────────────────────────────────────────────
+  const getFullContent = (platformId: string): string => {
+    const data = generatedContent[platformId];
+    if (!data) return "";
+    const hashtagStr = data.hashtags.length > 0 ? `\n\n${data.hashtags.map((h) => `#${h}`).join(" ")}` : "";
+    return data.content + hashtagStr;
+  };
+
+  const handleFinalPost = async () => {
+    if (selectedPlatforms.length === 0) {
+      Alert.alert("Select Platforms", "Please select at least one platform to post to.");
       return;
     }
 
     triggerHaptic();
-    setIsSaving(true);
 
-    try {
-      // Save a post for each selected platform
-      for (const platformId of selectedPlatforms) {
-        await createPostMutation.mutateAsync({
-          title: generatedContent.title,
-          content: getFullContent(platformId),
-          contentType,
-          platform: platformId,
-          aiGenerated: true,
-        });
-      }
+    if (postNow) {
+      // ── Post Now flow ──
+      if (uploadPostEnabled) {
+        // Use Upload-Post API for real posting
+        Alert.alert(
+          "Post Now",
+          `Post to ${selectedPlatforms.length} platform(s) right now?`,
+          [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "Post Now",
+              onPress: async () => {
+                setIsPosting(true);
+                try {
+                  const platformContent: Record<string, string> = {};
+                  for (const pid of selectedPlatforms) {
+                    platformContent[pid] = getFullContent(pid);
+                  }
+                  const result = await postText({
+                    platforms: selectedPlatforms,
+                    content: getFullContent(selectedPlatforms[0]),
+                    platformContent,
+                  });
 
-      const platformCount = selectedPlatforms.length;
-      Alert.alert(
-        "Saved!", 
-        `Your content has been saved as ${platformCount} draft${platformCount > 1 ? "s" : ""} (one for each platform).`, 
-        [{ text: "OK", onPress: () => router.back() }]
-      );
-    } catch (error) {
-      Alert.alert("Error", "Failed to save content. Please try again.");
-    } finally {
-      setIsSaving(false);
-    }
-  };
+                  for (const pid of selectedPlatforms) {
+                    await logActivity({ type: "published", title: topic.trim().substring(0, 50), platform: pid });
+                    await incrementStat("published", pid);
+                  }
 
-  const handlePostToAllPlatforms = async () => {
-    if (!generatedContent) return;
-
-    // For guest users, save locally instead
-    if (!isAuthenticated) {
-      Alert.alert(
-        "Create Campaign",
-        "Sign in to schedule posts to your connected accounts, or save locally for now.",
-        [
-          { text: "Save Locally", onPress: () => saveLocally() },
-          { text: "Sign In", onPress: () => router.push("/login") },
-        ]
-      );
-      return;
-    }
-
-    // Check post limit
-    if (!canPost) {
-      Alert.alert(
-        "Post Limit Reached",
-        postLimitReason || "You've reached your weekly post limit. Upgrade to post more!",
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Upgrade", onPress: () => router.push("/subscription") },
-        ]
-      );
-      return;
-    }
-
-    triggerHaptic();
-    setIsSaving(true);
-
-    try {
-      // Create and schedule posts for all selected platforms
-      const results: string[] = [];
-      
-      for (const platformId of selectedPlatforms) {
-        await createPostMutation.mutateAsync({
-          title: generatedContent.title,
-          content: getFullContent(platformId),
-          contentType,
-          platform: platformId,
-          aiGenerated: true,
-        });
-        results.push(PLATFORMS.find(p => p.id === platformId)?.name || platformId);
-      }
-
-      Alert.alert(
-        "Campaign Created!", 
-        `Your content has been prepared for ${results.join(", ")}. Go to the Calendar to schedule posting times.`,
-        [{ text: "View Calendar", onPress: () => router.push("/(tabs)/calendar") }]
-      );
-    } catch (error) {
-      Alert.alert("Error", "Failed to create campaign. Please try again.");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handlePostNow = async () => {
-    if (!generatedContent) return;
-
-    // Check which selected platforms are connected
-    const platformsToPost = selectedPlatforms.filter(p => 
-      connectedPlatforms.includes(p as PostingSocialPlatform)
-    ) as PostingSocialPlatform[];
-
-    if (platformsToPost.length === 0) {
-      Alert.alert(
-        "No Connected Accounts",
-        "Please connect your social accounts first to post directly.",
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Connect Accounts", onPress: () => router.push("/social-accounts") },
-        ]
-      );
-      return;
-    }
-
-    // Show confirmation with platforms that will be posted to
-    const platformNames = platformsToPost.map(p => 
-      PLATFORMS.find(pl => pl.id === p)?.name || p
-    ).join(", ");
-
-    Alert.alert(
-      "Post Now",
-      `This will immediately post to: ${platformNames}\n\nAre you sure?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Post Now",
-          style: "default",
-          onPress: async () => {
-            triggerHaptic();
-            setIsPosting(true);
-
-            try {
-              const result = await postToMultiplePlatforms(
-                platformsToPost,
-                {
-                  text: generatedContent.content,
-                  title: generatedContent.title,
-                  hashtags: selectedHashtags,
-                  subreddit: targetSubreddits[0],
+                  if (result.overallSuccess) {
+                    if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                    Alert.alert("Posted!", `Successfully posted to ${result.successPlatforms.length} platform(s).`, [
+                      { text: "Done", onPress: () => router.back() },
+                    ]);
+                  } else {
+                    const failInfo = result.results.filter((r) => !r.success).map((r) => `${r.platform}: ${r.error}`).join("\n");
+                    Alert.alert("Partial Success", `Some platforms had issues.\n\n${failInfo}`, [{ text: "OK" }]);
+                  }
+                } catch (error: any) {
+                  Alert.alert("Error", error.message || "Failed to post.");
+                } finally {
+                  setIsPosting(false);
                 }
-              );
-
-              if (result.success) {
-                if (Platform.OS !== "web") {
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                }
-
-                const successPlatforms = result.results
-                  .filter(r => r.success)
-                  .map(r => PLATFORMS.find(p => p.id === r.platform)?.name || r.platform)
-                  .join(", ");
-
-                Alert.alert(
-                  "Posted!",
-                  `Successfully posted to: ${successPlatforms}${result.failureCount > 0 ? `\n\n${result.failureCount} platform(s) failed.` : ""}`,
-                  [{ text: "OK", onPress: () => router.back() }]
-                );
-              } else {
-                Alert.alert("Error", "Failed to post. Please try again.");
-              }
-            } catch (error) {
-              console.error("Post error:", error);
-              Alert.alert("Error", "Failed to post. Please try again.");
-            } finally {
-              setIsPosting(false);
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const handleSendForApproval = async () => {
-    if (!generatedContent) return;
-
-    if (!isAuthenticated) {
-      Alert.alert("Sign In Required", "Please sign in to send content for approval.");
-      return;
-    }
-
-    triggerHaptic();
-    setIsSaving(true);
-
-    try {
-      for (const platformId of selectedPlatforms) {
-        await createPostMutation.mutateAsync({
-          title: generatedContent.title,
-          content: getFullContent(platformId),
-          contentType,
-          platform: platformId,
-          aiGenerated: true,
-        });
+              },
+            },
+          ]
+        );
+      } else {
+        // Copy & Open App flow (no API key)
+        // Show the quick-post editor for the first selected platform
+        const firstPlatform = selectedPlatforms[0] as SimplePlatform;
+        setQuickPostPlatform(firstPlatform);
+        setQuickPostContent(getFullContent(firstPlatform));
+        setShowQuickPostEditor(true);
       }
+    } else {
+      // ── Schedule flow ──
+      const scheduledAt = getScheduleDateTime();
+      try {
+        // Save scheduled posts locally
+        const existingRaw = await AsyncStorage.getItem("postpal_local_scheduled");
+        const existing = existingRaw ? JSON.parse(existingRaw) : [];
 
-      // Log activity
-      await logActivity({
-        type: "created",
-        title: generatedContent.title,
-        platform: selectedPlatforms[0],
-      });
-      
-      const platformCount = selectedPlatforms.length;
-      Alert.alert(
-        "Sent!", 
-        `${platformCount} post${platformCount > 1 ? "s have" : " has"} been sent for approval.`, 
-        [{ text: "OK", onPress: () => router.back() }]
-      );
-    } catch (error) {
-      Alert.alert("Error", "Failed to send content. Please try again.");
-    } finally {
-      setIsSaving(false);
+        for (const pid of selectedPlatforms) {
+          existing.push({
+            id: Date.now() + Math.random(),
+            title: `Campaign: ${topic.trim().substring(0, 50)}`,
+            content: getFullContent(pid),
+            contentType: "social",
+            platform: pid,
+            scheduledAt: scheduledAt.toISOString(),
+            status: "scheduled",
+            createdAt: new Date().toISOString(),
+          });
+          await logActivity({ type: "scheduled", title: topic.trim().substring(0, 50), platform: pid });
+          await incrementStat("created", pid);
+        }
+
+        await AsyncStorage.setItem("postpal_local_scheduled", JSON.stringify(existing));
+
+        if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Alert.alert(
+          "Scheduled!",
+          `${selectedPlatforms.length} post(s) scheduled for ${formatScheduleDisplay()}.`,
+          [{ text: "View Calendar", onPress: () => router.push("/(tabs)/calendar") }, { text: "Done", onPress: () => router.back() }]
+        );
+      } catch (error) {
+        Alert.alert("Error", "Failed to schedule posts. Please try again.");
+      }
     }
   };
 
-  const availablePlatforms = getAvailablePlatforms();
-  const allPlatformsSelected = selectedPlatforms.length === availablePlatforms.length;
+  // ─── Quick post for remaining platforms ────────────────────────────────────
+  const handleNextQuickPost = (currentIndex: number) => {
+    const nextIndex = currentIndex + 1;
+    if (nextIndex < selectedPlatforms.length) {
+      const nextPlatform = selectedPlatforms[nextIndex] as SimplePlatform;
+      setQuickPostPlatform(nextPlatform);
+      setQuickPostContent(getFullContent(nextPlatform));
+    } else {
+      setShowQuickPostEditor(false);
+      Alert.alert("All Done!", `Content shared to ${selectedPlatforms.length} platform(s).`, [
+        { text: "Done", onPress: () => router.back() },
+      ]);
+    }
+  };
 
-  // Check if any selected platform supports preview
-  const supportsPreview = selectedPlatforms.some(p => 
-    ["instagram", "twitter", "linkedin", "facebook", "youtube", "reddit"].includes(p)
-  );
+  // ─── Date picker helpers ───────────────────────────────────────────────────
+  const generateDateOptions = (): Date[] => {
+    const dates: Date[] = [];
+    const today = new Date();
+    for (let i = 0; i < 14; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() + i);
+      dates.push(d);
+    }
+    return dates;
+  };
 
+  const dateOptions = generateDateOptions();
+
+  // ─── RENDER ────────────────────────────────────────────────────────────────
   return (
     <ScreenContainer>
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        className="flex-1"
-      >
-        <ScrollView 
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} className="flex-1">
+        {/* Header */}
+        <View className="px-5 pt-4 pb-1">
+          <View className="flex-row items-center">
+            <TouchableOpacity
+              onPress={() => {
+                if (step > 1) {
+                  setStep(step - 1);
+                  scrollToTop();
+                } else {
+                  router.back();
+                }
+              }}
+              className="mr-3 p-1"
+              activeOpacity={0.7}
+            >
+              <IconSymbol name="chevron.left" size={24} color={colors.foreground} />
+            </TouchableOpacity>
+            <Text className="text-xl font-bold text-foreground flex-1">Create Content</Text>
+          </View>
+        </View>
+
+        {/* Step Indicator */}
+        <StepIndicator currentStep={step} totalSteps={4} />
+
+        <ScrollView
           ref={scrollViewRef}
-          className="flex-1" 
+          className="flex-1"
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Header */}
-          <View className="px-5 pt-4 pb-2">
-            <View className="flex-row items-center mb-2">
-              <TouchableOpacity 
-                onPress={() => router.back()} 
-                className="mr-3 p-1"
-                activeOpacity={0.7}
-              >
-                <IconSymbol name="chevron.left" size={24} color={colors.foreground} />
-              </TouchableOpacity>
-              <Text className="text-2xl font-bold text-foreground">Create Campaign</Text>
-            </View>
-            <Text className="text-sm text-muted mt-1 ml-8">
-              Generate content for multiple platforms at once
-            </Text>
-          </View>
+          {/* ═══════════════════════════════════════════════════════════════════
+              STEP 1: TOPIC
+              ═══════════════════════════════════════════════════════════════════ */}
+          {step === 1 && (
+            <View className="px-5 pt-4">
+              <Text className="text-lg font-semibold text-foreground mb-2">What do you want to post about?</Text>
+              <Text className="text-sm text-muted mb-4">Enter your topic or idea and we'll create content for every platform.</Text>
 
-          {/* Content Type Selection */}
-          <View className="px-5 pt-4">
-            <Text className="text-sm font-semibold text-foreground mb-3">Content Type</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View className="flex-row">
-                {CONTENT_TYPES.map((type) => (
+              <TextInput
+                className="bg-surface border border-border rounded-2xl px-4 py-4 text-foreground text-base"
+                placeholder="e.g. 5 tips for growing your business on social media"
+                placeholderTextColor={colors.muted}
+                value={topic}
+                onChangeText={setTopic}
+                multiline
+                numberOfLines={4}
+                style={{ minHeight: 120, textAlignVertical: "top", color: colors.foreground }}
+                returnKeyType="done"
+              />
+
+              {/* Brand indicator */}
+              {isBrandConfigured && (
+                <TouchableOpacity
+                  className="flex-row items-center mt-4 px-4 py-3 rounded-xl"
+                  style={{ backgroundColor: `${colors.primary}10`, borderWidth: 1, borderColor: `${colors.primary}20` }}
+                  onPress={() => router.push("/my-brand")}
+                  activeOpacity={0.7}
+                >
+                  <IconSymbol name="checkmark.seal.fill" size={18} color={colors.primary} />
+                  <Text className="text-sm font-medium text-foreground ml-2 flex-1">
+                    Brand: {brand.brandName}
+                  </Text>
+                  <Text className="text-xs text-muted">Tap to edit</Text>
+                </TouchableOpacity>
+              )}
+
+              {/* Generate Button */}
+              <TouchableOpacity
+                className="bg-primary rounded-2xl py-4 mt-6 items-center flex-row justify-center"
+                onPress={handleGenerate}
+                activeOpacity={0.8}
+                disabled={isGenerating || !topic.trim()}
+                style={!topic.trim() ? { opacity: 0.5 } : undefined}
+              >
+                {isGenerating ? (
+                  <>
+                    <ActivityIndicator color={colors.background} />
+                    <Text className="text-lg font-semibold text-background ml-2">Generating...</Text>
+                  </>
+                ) : (
+                  <>
+                    <IconSymbol name="sparkles" size={22} color={colors.background} />
+                    <Text className="text-lg font-semibold text-background ml-2">Generate Content</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* ═══════════════════════════════════════════════════════════════════
+              STEP 2: REVIEW CONTENT
+              ═══════════════════════════════════════════════════════════════════ */}
+          {step === 2 && (
+            <View className="px-5 pt-4">
+              <Text className="text-lg font-semibold text-foreground mb-1">Your Content is Ready</Text>
+              <Text className="text-sm text-muted mb-4">Review the generated content. Tap any platform to preview or edit.</Text>
+
+              {/* Preview first platform's content */}
+              {Object.keys(generatedContent).length > 0 && (
+                <View className="bg-surface rounded-2xl p-4 border border-border mb-4">
+                  <Text className="text-sm font-medium text-muted mb-2">Preview (Instagram)</Text>
+                  <Text className="text-sm text-foreground leading-relaxed" numberOfLines={8}>
+                    {generatedContent.instagram?.content || Object.values(generatedContent)[0]?.content || ""}
+                  </Text>
                   <TouchableOpacity
-                    key={type.id}
-                    className={`mr-3 px-4 py-3 rounded-xl border ${
-                      contentType === type.id 
-                        ? "bg-primary border-primary" 
-                        : "bg-surface border-border"
-                    }`}
+                    className="mt-3 flex-row items-center"
                     onPress={() => {
                       triggerHaptic();
-                      setContentType(type.id);
-                      // Reset platform selection when content type changes
-                      const newAvailable = PLATFORMS.filter(p => {
-                        if (type.id === "social") return ["instagram", "twitter", "linkedin", "facebook", "reddit", "tiktok", "youtube"].includes(p.id);
-                        if (type.id === "video") return ["youtube", "tiktok"].includes(p.id);
-                        if (type.id === "newsletter") return p.id === "email";
-                        if (type.id === "blog") return p.id === "blog";
-                        return true;
-                      });
-                      setSelectedPlatforms([newAvailable[0]?.id || "instagram"]);
+                      setEditPlatform("instagram");
+                      setEditText(generatedContent.instagram?.content || "");
+                      setIsEditing(true);
                     }}
                     activeOpacity={0.7}
                   >
-                    <View className="flex-row items-center">
-                      <IconSymbol 
-                        name={type.icon as any} 
-                        size={18} 
-                        color={contentType === type.id ? colors.background : colors.foreground} 
-                      />
-                      <Text className={`ml-2 font-medium ${
-                        contentType === type.id ? "text-background" : "text-foreground"
-                      }`}>
-                        {type.name}
-                      </Text>
-                    </View>
+                    <IconSymbol name="pencil" size={14} color={colors.primary} />
+                    <Text className="text-sm font-medium text-primary ml-1">Edit Content</Text>
                   </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
-          </View>
+                </View>
+              )}
 
-          {/* Platform Selection - Multi-Select */}
-          <View className="px-5 pt-4">
-            <View className="flex-row justify-between items-center mb-3">
-              <Text className="text-sm font-semibold text-foreground">
-                Platforms ({selectedPlatforms.length} selected)
-              </Text>
-              <TouchableOpacity
-                onPress={handleSelectAllPlatforms}
-                className="px-3 py-1 rounded-full bg-surface border border-border"
-                activeOpacity={0.7}
-              >
-                <Text className="text-xs font-medium text-primary">
-                  {allPlatformsSelected ? "Deselect All" : "Select All"}
-                </Text>
-              </TouchableOpacity>
-            </View>
-            <View className="flex-row flex-wrap">
-              {availablePlatforms.map((p) => {
-                const isSelected = selectedPlatforms.includes(p.id);
+              {/* Platform content list */}
+              <Text className="text-sm font-medium text-foreground mb-2">Content generated for:</Text>
+              {PLATFORMS.map((p) => {
+                const data = generatedContent[p.id];
+                if (!data) return null;
                 return (
                   <TouchableOpacity
                     key={p.id}
-                    className={`mr-2 mb-2 px-4 py-3 rounded-xl border ${
-                      isSelected 
-                        ? "bg-primary border-primary" 
-                        : "bg-surface border-border"
-                    }`}
+                    className="flex-row items-center py-3 border-b border-border"
+                    onPress={() => {
+                      triggerHaptic();
+                      setEditPlatform(p.id);
+                      setEditText(data.content);
+                      setIsEditing(true);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <View
+                      className="w-9 h-9 rounded-full items-center justify-center mr-3"
+                      style={{ backgroundColor: `${colors.primary}15` }}
+                    >
+                      <IconSymbol name={p.icon as any} size={18} color={colors.primary} />
+                    </View>
+                    <View className="flex-1">
+                      <Text className="text-sm font-medium text-foreground">{p.name}</Text>
+                      <Text className="text-xs text-muted" numberOfLines={1}>
+                        {data.content.substring(0, 60)}...
+                      </Text>
+                    </View>
+                    <IconSymbol name="chevron.right" size={16} color={colors.muted} />
+                  </TouchableOpacity>
+                );
+              })}
+
+              {/* Next Button */}
+              <TouchableOpacity
+                className="bg-primary rounded-2xl py-4 mt-6 items-center flex-row justify-center"
+                onPress={() => {
+                  triggerHaptic();
+                  setStep(3);
+                  scrollToTop();
+                }}
+                activeOpacity={0.8}
+              >
+                <Text className="text-lg font-semibold text-background">Next: Set Schedule</Text>
+                <IconSymbol name="chevron.right" size={20} color={colors.background} style={{ marginLeft: 8 }} />
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* ═══════════════════════════════════════════════════════════════════
+              STEP 3: SCHEDULE
+              ═══════════════════════════════════════════════════════════════════ */}
+          {step === 3 && (
+            <View className="px-5 pt-4">
+              <Text className="text-lg font-semibold text-foreground mb-1">When do you want to post?</Text>
+              <Text className="text-sm text-muted mb-4">Choose to post immediately or schedule for later.</Text>
+
+              {/* Post Now / Schedule Toggle */}
+              <View className="flex-row bg-surface rounded-2xl p-1 border border-border mb-6">
+                <TouchableOpacity
+                  className="flex-1 py-3 rounded-xl items-center"
+                  style={postNow ? { backgroundColor: colors.primary } : undefined}
+                  onPress={() => {
+                    triggerHaptic();
+                    setPostNow(true);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text className={`font-semibold ${postNow ? "text-background" : "text-foreground"}`}>Post Now</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  className="flex-1 py-3 rounded-xl items-center"
+                  style={!postNow ? { backgroundColor: colors.primary } : undefined}
+                  onPress={() => {
+                    triggerHaptic();
+                    setPostNow(false);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text className={`font-semibold ${!postNow ? "text-background" : "text-foreground"}`}>Schedule</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Schedule Date/Time Picker (only if scheduling) */}
+              {!postNow && (
+                <View>
+                  {/* Date Selection */}
+                  <Text className="text-sm font-semibold text-foreground mb-2">Date</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-4">
+                    <View className="flex-row">
+                      {dateOptions.map((date, index) => {
+                        const isSelected = scheduleDate.toDateString() === date.toDateString();
+                        const dayName = index === 0 ? "Today" : index === 1 ? "Tomorrow" : date.toLocaleDateString("en-US", { weekday: "short" });
+                        const dayNum = date.getDate();
+                        return (
+                          <TouchableOpacity
+                            key={index}
+                            className="mr-2 px-4 py-3 rounded-xl items-center"
+                            style={{
+                              backgroundColor: isSelected ? colors.primary : colors.surface,
+                              borderWidth: 1,
+                              borderColor: isSelected ? colors.primary : colors.border,
+                              minWidth: 64,
+                            }}
+                            onPress={() => {
+                              triggerHaptic();
+                              setScheduleDate(date);
+                            }}
+                            activeOpacity={0.7}
+                          >
+                            <Text className={`text-xs ${isSelected ? "text-background" : "text-muted"}`}>{dayName}</Text>
+                            <Text className={`text-lg font-bold ${isSelected ? "text-background" : "text-foreground"}`}>{dayNum}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </ScrollView>
+
+                  {/* Time Selection */}
+                  <Text className="text-sm font-semibold text-foreground mb-2">Time</Text>
+                  <View className="flex-row items-center mb-6">
+                    {/* Hour */}
+                    <View className="flex-row flex-wrap flex-1 mr-2">
+                      {[9, 10, 11, 12, 1, 2, 3, 4, 5, 6].map((h) => (
+                        <TouchableOpacity
+                          key={h}
+                          className="px-3 py-2 rounded-lg mr-1 mb-1"
+                          style={{
+                            backgroundColor: scheduleHour === h ? colors.primary : colors.surface,
+                            borderWidth: 1,
+                            borderColor: scheduleHour === h ? colors.primary : colors.border,
+                          }}
+                          onPress={() => {
+                            triggerHaptic();
+                            setScheduleHour(h);
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Text className={`text-sm font-medium ${scheduleHour === h ? "text-background" : "text-foreground"}`}>{h}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    {/* Minute */}
+                    <View className="mr-2">
+                      {["00", "15", "30", "45"].map((m) => (
+                        <TouchableOpacity
+                          key={m}
+                          className="px-3 py-1.5 rounded-lg mb-1"
+                          style={{
+                            backgroundColor: scheduleMinute === parseInt(m) ? colors.primary : colors.surface,
+                            borderWidth: 1,
+                            borderColor: scheduleMinute === parseInt(m) ? colors.primary : colors.border,
+                          }}
+                          onPress={() => {
+                            triggerHaptic();
+                            setScheduleMinute(parseInt(m));
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Text className={`text-xs font-medium ${scheduleMinute === parseInt(m) ? "text-background" : "text-foreground"}`}>:{m}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    {/* AM/PM */}
+                    <View>
+                      {(["AM", "PM"] as const).map((p) => (
+                        <TouchableOpacity
+                          key={p}
+                          className="px-3 py-2 rounded-lg mb-1"
+                          style={{
+                            backgroundColor: schedulePeriod === p ? colors.primary : colors.surface,
+                            borderWidth: 1,
+                            borderColor: schedulePeriod === p ? colors.primary : colors.border,
+                          }}
+                          onPress={() => {
+                            triggerHaptic();
+                            setSchedulePeriod(p);
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Text className={`text-sm font-medium ${schedulePeriod === p ? "text-background" : "text-foreground"}`}>{p}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+
+                  {/* Schedule summary */}
+                  <View className="bg-surface rounded-xl p-3 border border-border mb-4">
+                    <View className="flex-row items-center">
+                      <IconSymbol name="calendar" size={18} color={colors.primary} />
+                      <Text className="text-sm font-medium text-foreground ml-2">{formatScheduleDisplay()}</Text>
+                    </View>
+                  </View>
+                </View>
+              )}
+
+              {/* Next Button */}
+              <TouchableOpacity
+                className="bg-primary rounded-2xl py-4 mt-2 items-center flex-row justify-center"
+                onPress={() => {
+                  triggerHaptic();
+                  setStep(4);
+                  scrollToTop();
+                }}
+                activeOpacity={0.8}
+              >
+                <Text className="text-lg font-semibold text-background">Next: Select Platforms</Text>
+                <IconSymbol name="chevron.right" size={20} color={colors.background} style={{ marginLeft: 8 }} />
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* ═══════════════════════════════════════════════════════════════════
+              STEP 4: SELECT PLATFORMS & POST
+              ═══════════════════════════════════════════════════════════════════ */}
+          {step === 4 && (
+            <View className="px-5 pt-4">
+              <Text className="text-lg font-semibold text-foreground mb-1">Where do you want to post?</Text>
+              <Text className="text-sm text-muted mb-4">Select the platforms to publish your content.</Text>
+
+              {/* Select All */}
+              <TouchableOpacity
+                className="flex-row items-center justify-between mb-4 px-4 py-3 rounded-xl bg-surface border border-border"
+                onPress={handleSelectAll}
+                activeOpacity={0.7}
+              >
+                <Text className="text-sm font-semibold text-foreground">
+                  {selectedPlatforms.length === PLATFORMS.length ? "Deselect All" : "Select All Platforms"}
+                </Text>
+                <View
+                  className="w-6 h-6 rounded-md items-center justify-center"
+                  style={{
+                    backgroundColor: selectedPlatforms.length === PLATFORMS.length ? colors.primary : "transparent",
+                    borderWidth: 2,
+                    borderColor: selectedPlatforms.length === PLATFORMS.length ? colors.primary : colors.border,
+                  }}
+                >
+                  {selectedPlatforms.length === PLATFORMS.length && (
+                    <IconSymbol name="checkmark" size={14} color={colors.background} />
+                  )}
+                </View>
+              </TouchableOpacity>
+
+              {/* Platform Grid */}
+              {PLATFORMS.map((p) => {
+                const isSelected = selectedPlatforms.includes(p.id);
+                const config = PLATFORM_CONFIGS[p.id as SimplePlatform];
+                const platformColor = config?.color || colors.primary;
+
+                return (
+                  <TouchableOpacity
+                    key={p.id}
+                    className="flex-row items-center py-3.5 px-4 rounded-xl mb-2"
+                    style={{
+                      backgroundColor: isSelected ? `${platformColor}12` : colors.surface,
+                      borderWidth: 1.5,
+                      borderColor: isSelected ? platformColor : colors.border,
+                    }}
                     onPress={() => handlePlatformToggle(p.id)}
                     activeOpacity={0.7}
                   >
-                    <View className="flex-row items-center">
-                      <IconSymbol 
-                        name={p.icon as any} 
-                        size={18} 
-                        color={isSelected ? colors.background : colors.foreground} 
-                      />
-                      <Text className={`ml-2 font-medium ${
-                        isSelected ? "text-background" : "text-foreground"
-                      }`}>
-                        {p.name}
-                      </Text>
-                      {isSelected && (
-                        <View className="ml-2 w-5 h-5 rounded-full bg-background/20 items-center justify-center">
-                          <IconSymbol name="checkmark" size={12} color={colors.background} />
-                        </View>
-                      )}
+                    <View
+                      className="w-10 h-10 rounded-full items-center justify-center mr-3"
+                      style={{ backgroundColor: `${platformColor}20` }}
+                    >
+                      <IconSymbol name={p.icon as any} size={20} color={platformColor} />
+                    </View>
+                    <View className="flex-1">
+                      <Text className="text-base font-medium text-foreground">{p.name}</Text>
+                      <Text className="text-xs text-muted">{p.charLimit.toLocaleString()} char limit</Text>
+                    </View>
+                    <View
+                      className="w-6 h-6 rounded-full items-center justify-center"
+                      style={{
+                        backgroundColor: isSelected ? platformColor : "transparent",
+                        borderWidth: 2,
+                        borderColor: isSelected ? platformColor : colors.border,
+                      }}
+                    >
+                      {isSelected && <IconSymbol name="checkmark" size={14} color="#FFFFFF" />}
                     </View>
                   </TouchableOpacity>
                 );
               })}
-            </View>
-            {selectedPlatforms.length > 1 && (
-              <Text className="text-xs text-muted mt-2">
-                Content will be optimized for each platform automatically
-              </Text>
-            )}
-          </View>
 
-          {/* Tone Selection */}
-          <View className="px-5 pt-4">
-            <Text className="text-sm font-semibold text-foreground mb-3">Tone</Text>
-            <View className="flex-row flex-wrap">
-              {TONES.map((t) => (
-                <TouchableOpacity
-                  key={t.id}
-                  className={`mr-2 mb-2 px-4 py-2 rounded-full border ${
-                    tone === t.id 
-                      ? "bg-primary border-primary" 
-                      : "bg-surface border-border"
-                  }`}
-                  onPress={() => {
-                    triggerHaptic();
-                    setTone(t.id);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Text className={`font-medium ${
-                    tone === t.id ? "text-background" : "text-foreground"
-                  }`}>
-                    {t.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          {/* Topic Input */}
-          <View className="px-5 pt-4">
-            <Text className="text-sm font-semibold text-foreground mb-3">Campaign Topic *</Text>
-            <TextInput
-              className="bg-surface border border-border rounded-xl px-4 py-3 text-foreground"
-              placeholder="What should the content be about?"
-              placeholderTextColor={colors.muted}
-              value={topic}
-              onChangeText={setTopic}
-              multiline
-              numberOfLines={3}
-              style={{ minHeight: 80, textAlignVertical: "top", color: colors.foreground }}
-            />
-          </View>
-
-          {/* Keywords Input */}
-          <View className="px-5 pt-4">
-            <Text className="text-sm font-semibold text-foreground mb-3">Keywords (optional)</Text>
-            <TextInput
-              className="bg-surface border border-border rounded-xl px-4 py-3 text-foreground"
-              placeholder="marketing, growth, engagement (comma separated)"
-              placeholderTextColor={colors.muted}
-              value={keywords}
-              onChangeText={setKeywords}
-              style={{ color: colors.foreground }}
-            />
-          </View>
-
-          {/* Brand Context Indicator */}
-          {isBrandConfigured && (
-            <View className="px-5 pt-4">
-              <TouchableOpacity
-                className="flex-row items-center px-4 py-3 rounded-xl border"
-                style={{ backgroundColor: `${colors.primary}08`, borderColor: `${colors.primary}25` }}
-                onPress={() => router.push("/my-brand")}
-                activeOpacity={0.7}
-              >
-                <IconSymbol name="checkmark.seal.fill" size={18} color={colors.primary} />
-                <View className="flex-1 ml-2">
-                  <Text className="text-sm font-medium text-foreground">
-                    Brand: {brand.brandName}
-                  </Text>
-                  <Text className="text-xs text-muted">
-                    AI content will be personalized to your brand
+              {/* Summary */}
+              {selectedPlatforms.length > 0 && (
+                <View className="bg-surface rounded-xl p-3 mt-4 border border-border">
+                  <Text className="text-sm text-foreground text-center">
+                    <Text className="font-bold">{selectedPlatforms.length}</Text> platform{selectedPlatforms.length !== 1 ? "s" : ""} selected
+                    {!postNow && ` · ${formatScheduleDisplay()}`}
+                    {postNow && " · Posting now"}
                   </Text>
                 </View>
-                <IconSymbol name="chevron.right" size={14} color={colors.muted} />
-              </TouchableOpacity>
-            </View>
-          )}
+              )}
 
-          {/* Upload-Post API Status */}
-          {uploadPostEnabled && (
-            <View className="px-5 pt-3">
-              <View
-                className="flex-row items-center px-4 py-2.5 rounded-xl"
-                style={{ backgroundColor: '#6366F115' }}
+              {/* Upload-Post API indicator */}
+              {uploadPostEnabled && postNow && (
+                <View className="flex-row items-center px-4 py-2.5 rounded-xl mt-3" style={{ backgroundColor: "#6366F115" }}>
+                  <IconSymbol name="bolt.fill" size={16} color="#6366F1" />
+                  <Text className="text-xs font-medium ml-2" style={{ color: "#6366F1" }}>
+                    Upload-Post API connected — real posting enabled
+                  </Text>
+                </View>
+              )}
+
+              {/* Final Action Button */}
+              <TouchableOpacity
+                className="rounded-2xl py-4 mt-6 items-center flex-row justify-center"
+                style={{
+                  backgroundColor: selectedPlatforms.length > 0 ? (postNow ? colors.success : colors.primary) : colors.muted,
+                  opacity: selectedPlatforms.length > 0 ? 1 : 0.5,
+                }}
+                onPress={handleFinalPost}
+                activeOpacity={0.8}
+                disabled={selectedPlatforms.length === 0 || isPosting}
               >
-                <IconSymbol name="bolt.fill" size={16} color="#6366F1" />
-                <Text className="text-xs font-medium ml-2" style={{ color: '#6366F1' }}>
-                  Upload-Post API connected — real posting enabled
-                </Text>
-              </View>
-            </View>
-          )}
-
-          {/* Generate Button */}
-          <View className="px-5 pt-6">
-            <TouchableOpacity
-              className="bg-primary rounded-xl py-4 items-center flex-row justify-center"
-              onPress={handleGenerate}
-              activeOpacity={0.8}
-              disabled={isGenerating}
-            >
-              {isGenerating ? (
-                <>
+                {isPosting ? (
                   <ActivityIndicator color={colors.background} />
-                  <Text className="text-lg font-semibold text-background ml-2">
-                    Generating for {selectedPlatforms.length} platform{selectedPlatforms.length > 1 ? "s" : ""}...
-                  </Text>
-                </>
-              ) : (
-                <>
-                  <IconSymbol name="sparkles" size={22} color={colors.background} />
-                  <Text className="text-lg font-semibold text-background ml-2">
-                    Generate Campaign
-                  </Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
-
-          {/* Generated Content */}
-          {generatedContent && (
-            <View className="px-5 pt-6">
-              <View className="bg-surface rounded-2xl p-4 border border-border">
-                <Text className="text-lg font-bold text-foreground mb-2">
-                  {generatedContent.title}
-                </Text>
-                
-                {/* Platform Tabs for Preview */}
-                {selectedPlatforms.length > 1 && (
-                  <View className="mb-4">
-                    <Text className="text-xs text-muted mb-2">Preview by platform:</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                      <View className="flex-row">
-                        {selectedPlatforms.map((pid) => {
-                          const platform = PLATFORMS.find(p => p.id === pid);
-                          return (
-                            <TouchableOpacity
-                              key={pid}
-                              className={`mr-2 px-3 py-1.5 rounded-full ${
-                                previewPlatform === pid ? "bg-primary" : "bg-background"
-                              }`}
-                              onPress={() => {
-                                triggerHaptic();
-                                setPreviewPlatform(pid);
-                              }}
-                            >
-                              <Text className={`text-xs font-medium ${
-                                previewPlatform === pid ? "text-background" : "text-foreground"
-                              }`}>
-                                {platform?.name}
-                              </Text>
-                            </TouchableOpacity>
-                          );
-                        })}
-                      </View>
-                    </ScrollView>
-                  </View>
-                )}
-                
-                {/* Edit/View Toggle */}
-                <View className="flex-row items-center justify-between mb-3">
-                  <Text className="text-sm font-medium text-foreground">Generated Content</Text>
-                  <TouchableOpacity
-                    className="flex-row items-center px-3 py-1.5 rounded-full bg-primary/10"
-                    onPress={() => {
-                      triggerHaptic();
-                      if (!isEditing) {
-                        setEditedContent(getContentForPlatform(previewPlatform));
-                      }
-                      setIsEditing(!isEditing);
-                    }}
-                  >
-                    <IconSymbol name={isEditing ? "checkmark" : "pencil"} size={14} color={colors.primary} />
-                    <Text className="text-xs font-medium text-primary ml-1">
-                      {isEditing ? "Done Editing" : "Edit Content"}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                {/* Full Content Display / Edit */}
-                {isEditing ? (
-                  <TextInput
-                    className="bg-background rounded-xl p-3 mb-3 text-sm"
-                    value={editedContent}
-                    onChangeText={(text) => {
-                      setEditedContent(text);
-                      // Update the platform version with edited content
-                      if (generatedContent?.platformVersions) {
-                        setGeneratedContent({
-                          ...generatedContent,
-                          platformVersions: {
-                            ...generatedContent.platformVersions,
-                            [previewPlatform]: {
-                              ...generatedContent.platformVersions[previewPlatform],
-                              content: text,
-                            },
-                          },
-                        });
-                      }
-                    }}
-                    multiline
-                    style={{ minHeight: 200, textAlignVertical: "top", color: colors.foreground }}
-                    placeholder="Edit your content here..."
-                    placeholderTextColor={colors.muted}
-                  />
                 ) : (
-                  <View className="bg-background rounded-xl p-3 mb-3">
-                    <Text className="text-sm text-foreground leading-relaxed">
-                      {getContentForPlatform(previewPlatform)}
+                  <>
+                    <IconSymbol name={postNow ? "paperplane.fill" : "calendar"} size={22} color={colors.background} />
+                    <Text className="text-lg font-semibold text-background ml-2">
+                      {postNow
+                        ? `Post Now to ${selectedPlatforms.length} Platform${selectedPlatforms.length !== 1 ? "s" : ""}`
+                        : `Schedule ${selectedPlatforms.length} Post${selectedPlatforms.length !== 1 ? "s" : ""}`}
                     </Text>
-                  </View>
+                  </>
                 )}
-                
-                {/* Character Count */}
-                <View className="flex-row items-center justify-between mb-2">
-                  <Text className="text-xs text-muted">
-                    {getContentForPlatform(previewPlatform).length} characters
-                  </Text>
-                  {PLATFORMS.find(p => p.id === previewPlatform)?.charLimit && (
-                    <Text className={`text-xs ${getContentForPlatform(previewPlatform).length > (PLATFORMS.find(p => p.id === previewPlatform)?.charLimit || 0) ? 'text-error' : 'text-muted'}`}>
-                      Limit: {PLATFORMS.find(p => p.id === previewPlatform)?.charLimit}
-                    </Text>
-                  )}
-                </View>
-                
-                {/* Hashtags (not for Reddit) */}
-                {previewPlatform !== "reddit" && getHashtagsForPlatform(previewPlatform).length > 0 && (
-                  <View className="mt-3 flex-row flex-wrap">
-                    {getHashtagsForPlatform(previewPlatform).map((tag, index) => (
-                      <Text key={index} className="text-sm text-primary mr-2">
-                        #{tag}
-                      </Text>
-                    ))}
-                  </View>
-                )}
-
-                {/* Platform-specific note */}
-                <View className="mt-3 pt-3 border-t border-border">
-                  <Text className="text-xs text-muted">
-                    {PLATFORM_FORMATTING[previewPlatform]?.style || "Standard formatting"}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Hashtag Suggestions */}
-              {previewPlatform !== "reddit" && ["instagram", "twitter", "linkedin", "facebook", "youtube", "tiktok"].includes(previewPlatform) && (
-                <HashtagSuggestions
-                  topic={topic}
-                  platform={previewPlatform as "instagram" | "twitter" | "linkedin" | "facebook" | "youtube" | "tiktok"}
-                  selectedHashtags={getHashtagsForPlatform(previewPlatform)}
-                  onToggleHashtag={handleHashtagToggle}
-                />
-              )}
-
-              {/* Reddit Subreddit Targeting */}
-              {selectedPlatforms.includes("reddit") && (
-                <SubredditSuggestions
-                  topic={topic}
-                  content={generatedContent?.content}
-                  selectedSubreddits={targetSubreddits}
-                  onToggleSubreddit={(subreddit) => {
-                    setTargetSubreddits(prev =>
-                      prev.includes(subreddit)
-                        ? prev.filter(s => s !== subreddit)
-                        : [...prev, subreddit]
-                    );
-                  }}
-                  onSubredditInput={setSubredditInput}
-                />
-              )}
-
-              {/* Platform Preview Toggle */}
-              {supportsPreview && (
-                <TouchableOpacity
-                  className="mt-4 flex-row items-center justify-center py-3 bg-surface rounded-xl border border-border"
-                  onPress={() => {
-                    triggerHaptic();
-                    setShowPreview(!showPreview);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <IconSymbol 
-                    name={showPreview ? "eye.slash" : "eye"} 
-                    size={18} 
-                    color={colors.primary} 
-                  />
-                  <Text className="ml-2 font-medium text-primary">
-                    {showPreview ? "Hide Preview" : "Show Platform Preview"}
-                  </Text>
-                </TouchableOpacity>
-              )}
-
-              {/* Platform Preview */}
-              {showPreview && supportsPreview && (
-                <PlatformPreview
-                  selectedPlatform={previewPlatform as "instagram" | "twitter" | "linkedin" | "facebook" | "youtube" | "reddit"}
-                  content={getContentForPlatform(previewPlatform)}
-                  hashtags={previewPlatform !== "reddit" ? getHashtagsForPlatform(previewPlatform) : []}
-                />
-              )}
-
-              {/* Action Buttons */}
-              <View className="mt-4 flex-row">
-                <TouchableOpacity
-                  className="flex-1 mr-2 py-3 rounded-xl border border-border items-center"
-                  onPress={handleSaveAsDraft}
-                  activeOpacity={0.7}
-                  disabled={isSaving || isPosting}
-                >
-                  <Text className="font-medium text-foreground">Save as Draft</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  className="flex-1 ml-2 py-3 rounded-xl bg-primary items-center flex-row justify-center"
-                  onPress={() => {
-                    triggerHaptic();
-                    // Navigate to calendar with generated content
-                    router.push({
-                      pathname: "/(tabs)/calendar",
-                      params: {
-                        scheduleContent: "true",
-                        title: generatedContent?.title || "",
-                        content: getFullContent(previewPlatform),
-                        contentType: contentType,
-                        platform: previewPlatform,
-                      }
-                    });
-                  }}
-                  activeOpacity={0.8}
-                  disabled={isSaving || isPosting}
-                >
-                  <IconSymbol name="calendar" size={18} color={colors.background} />
-                  <Text className="font-medium text-background ml-2">
-                    Schedule to Calendar
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Post Now Button */}
-              {connectedPlatforms.length > 0 && (
-                <TouchableOpacity
-                  className="mt-3 py-3 rounded-xl bg-success items-center flex-row justify-center"
-                  onPress={handlePostNow}
-                  activeOpacity={0.8}
-                  disabled={isSaving || isPosting}
-                >
-                  {isPosting ? (
-                    <ActivityIndicator color={colors.background} size="small" />
-                  ) : (
-                    <>
-                      <IconSymbol name="paperplane.fill" size={18} color={colors.background} />
-                      <Text className="font-semibold text-background ml-2">
-                        Post Now to {selectedPlatforms.filter(p => connectedPlatforms.includes(p as PostingSocialPlatform)).length} Platform{selectedPlatforms.filter(p => connectedPlatforms.includes(p as PostingSocialPlatform)).length !== 1 ? "s" : ""}
-                      </Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              )}
-
-              {/* Upload-Post API - Real Posting */}
-              {uploadPostEnabled && (
-                <TouchableOpacity
-                  className="mt-3 py-3 rounded-xl items-center flex-row justify-center"
-                  style={{ backgroundColor: '#6366F1' }}
-                  onPress={async () => {
-                    if (!generatedContent) return;
-                    triggerHaptic();
-
-                    const platformNames = selectedPlatforms
-                      .map(p => PLATFORMS.find(pl => pl.id === p)?.name || p)
-                      .join(", ");
-
-                    Alert.alert(
-                      "Post via Upload-Post API",
-                      `This will post directly to: ${platformNames}\n\nAre you sure?`,
-                      [
-                        { text: "Cancel", style: "cancel" },
-                        {
-                          text: "Post Now",
-                          style: "default",
-                          onPress: async () => {
-                            setIsPosting(true);
-                            try {
-                              // Build platform-specific content map
-                              const platformContent: Record<string, string> = {};
-                              for (const pid of selectedPlatforms) {
-                                platformContent[pid] = getFullContent(pid);
-                              }
-
-                              const result = await postText({
-                                platforms: selectedPlatforms,
-                                content: getFullContent(selectedPlatforms[0]),
-                                platformContent,
-                                subreddit: targetSubreddits[0],
-                              });
-
-                              setUploadPostResult(result);
-
-                              if (result.overallSuccess) {
-                                if (Platform.OS !== "web") {
-                                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                                }
-                                Alert.alert(
-                                  "Posted!",
-                                  `Successfully posted to ${result.successPlatforms.length} platform(s).`,
-                                  [{ text: "OK" }]
-                                );
-                              } else {
-                                const successMsg = result.successPlatforms.length > 0
-                                  ? `\n\nSucceeded: ${result.successPlatforms.join(", ")}`
-                                  : "";
-                                const failMsg = result.failedPlatforms.length > 0
-                                  ? `\n\nFailed: ${result.results.filter(r => !r.success).map(r => `${r.platform}: ${r.error}`).join("\n")}`
-                                  : "";
-                                Alert.alert(
-                                  "Partial Success",
-                                  `Some platforms had issues.${successMsg}${failMsg}`,
-                                  [{ text: "OK" }]
-                                );
-                              }
-
-                              // Log activity
-                              for (const pid of selectedPlatforms) {
-                                await logActivity({
-                                  type: "published",
-                                  title: generatedContent.title,
-                                  platform: pid,
-                                });
-                                await incrementStat("published", pid);
-                              }
-                            } catch (error: any) {
-                              Alert.alert("Error", error.message || "Failed to post via Upload-Post API.");
-                            } finally {
-                              setIsPosting(false);
-                            }
-                          },
-                        },
-                      ]
-                    );
-                  }}
-                  activeOpacity={0.8}
-                  disabled={isSaving || isPosting}
-                >
-                  {isPosting ? (
-                    <ActivityIndicator color="#FFFFFF" size="small" />
-                  ) : (
-                    <>
-                      <IconSymbol name="bolt.fill" size={18} color="#FFFFFF" />
-                      <Text className="font-semibold ml-2" style={{ color: '#FFFFFF' }}>
-                        Post via Upload-Post ({selectedPlatforms.length} Platform{selectedPlatforms.length !== 1 ? "s" : ""})
-                      </Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              )}
-
-              {/* Quick Post Buttons - Edit & Copy */}
-              <View className="mt-4">
-                <Text className="text-sm font-semibold text-foreground mb-3">Quick Post (Edit & Share)</Text>
-                <View className="flex-row flex-wrap">
-                  {selectedPlatforms.map((platformId) => {
-                    const simplePlatformId = platformId as SimplePlatform;
-                    const config = PLATFORM_CONFIGS[simplePlatformId];
-                    if (!config) return null;
-                    return (
-                      <TouchableOpacity
-                        key={platformId}
-                        className="mr-2 mb-2 px-4 py-3 rounded-xl bg-surface border border-border flex-row items-center"
-                        onPress={() => {
-                          triggerHaptic();
-                          const content = getFullContent(platformId);
-                          setQuickPostPlatform(simplePlatformId);
-                          setQuickPostContent(content);
-                          setShowQuickPostEditor(true);
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        <View 
-                          className="w-8 h-8 rounded-full items-center justify-center mr-2"
-                          style={{ backgroundColor: config.color + '20' }}
-                        >
-                          <IconSymbol name={config.icon as any} size={16} color={config.color} />
-                        </View>
-                        <Text className="font-medium text-foreground">{config.name}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-                <Text className="text-xs text-muted mt-2">
-                  Tap a platform to review, edit, and share your content
-                </Text>
-              </View>
-
-              {/* Send for Approval */}
-              <TouchableOpacity
-                className="mt-3 py-3 rounded-xl border border-primary items-center"
-                onPress={handleSendForApproval}
-                activeOpacity={0.7}
-                disabled={isSaving}
-              >
-                <Text className="font-medium text-primary">Send for Approval</Text>
               </TouchableOpacity>
-
-              {/* Multi-platform summary */}
-              {selectedPlatforms.length > 1 && (
-                <View className="mt-4 p-3 bg-success/10 rounded-xl">
-                  <Text className="text-sm text-success font-medium text-center">
-                    This campaign will post to {selectedPlatforms.length} platforms with optimized formatting for each
-                  </Text>
-                </View>
-              )}
             </View>
           )}
 
-          {/* Bottom Padding */}
+          {/* Bottom padding */}
           <View style={{ height: 100 }} />
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Quick Post Editor Modal */}
-      <Modal
-        visible={showQuickPostEditor}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowQuickPostEditor(false)}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          className="flex-1"
-        >
+      {/* ═══════════════════════════════════════════════════════════════════════
+          EDIT CONTENT MODAL
+          ═══════════════════════════════════════════════════════════════════════ */}
+      <Modal visible={isEditing} animationType="slide" transparent onRequestClose={() => setIsEditing(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} className="flex-1">
           <View className="flex-1 bg-black/50 justify-end">
             <View className="bg-background rounded-t-3xl max-h-[90%]">
-              {/* Modal Header */}
+              <View className="flex-row items-center justify-between p-4 border-b border-border">
+                <TouchableOpacity onPress={() => setIsEditing(false)}>
+                  <Text className="text-base text-muted">Cancel</Text>
+                </TouchableOpacity>
+                <Text className="text-lg font-semibold text-foreground">
+                  Edit {PLATFORMS.find((p) => p.id === editPlatform)?.name || "Content"}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    // Save edited content
+                    if (editPlatform && generatedContent[editPlatform]) {
+                      setGeneratedContent((prev) => ({
+                        ...prev,
+                        [editPlatform]: { ...prev[editPlatform], content: editText },
+                      }));
+                    }
+                    setIsEditing(false);
+                  }}
+                >
+                  <Text className="text-base font-semibold text-primary">Save</Text>
+                </TouchableOpacity>
+              </View>
+              <ScrollView className="px-4 pt-4 pb-8">
+                <TextInput
+                  className="bg-surface border border-border rounded-xl p-4"
+                  value={editText}
+                  onChangeText={setEditText}
+                  multiline
+                  style={{ minHeight: 250, textAlignVertical: "top", color: colors.foreground }}
+                  placeholderTextColor={colors.muted}
+                />
+                <Text className="text-xs text-muted mt-2">
+                  {editText.length} / {PLATFORMS.find((p) => p.id === editPlatform)?.charLimit || "∞"} characters
+                </Text>
+              </ScrollView>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* ═══════════════════════════════════════════════════════════════════════
+          QUICK POST MODAL (Copy & Open App)
+          ═══════════════════════════════════════════════════════════════════════ */}
+      <Modal visible={showQuickPostEditor} animationType="slide" transparent onRequestClose={() => setShowQuickPostEditor(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} className="flex-1">
+          <View className="flex-1 bg-black/50 justify-end">
+            <View className="bg-background rounded-t-3xl max-h-[90%]">
               <View className="flex-row items-center justify-between p-4 border-b border-border">
                 <TouchableOpacity onPress={() => setShowQuickPostEditor(false)}>
                   <Text className="text-base text-muted">Cancel</Text>
                 </TouchableOpacity>
                 <View className="items-center">
                   <Text className="text-lg font-semibold text-foreground">
-                    {quickPostPlatform ? PLATFORM_CONFIGS[quickPostPlatform]?.name : "Quick Post"}
+                    {quickPostPlatform ? PLATFORM_CONFIGS[quickPostPlatform]?.name : "Post"}
                   </Text>
                   {quickPostPlatform && (
                     <Text className="text-xs text-muted">
@@ -1400,9 +1011,17 @@ export default function CreateContentScreen() {
                     triggerHaptic();
                     const result = await copyAndOpenApp(quickPostPlatform, quickPostContent);
                     await logQuickPost(quickPostPlatform, quickPostContent);
-                    setShowQuickPostEditor(false);
+
                     if (result.success) {
-                      Alert.alert("Content Copied!", result.message);
+                      Alert.alert("Content Copied!", result.message, [
+                        {
+                          text: selectedPlatforms.length > 1 ? "Next Platform" : "Done",
+                          onPress: () => {
+                            const currentIdx = selectedPlatforms.indexOf(quickPostPlatform as SocialPlatform);
+                            handleNextQuickPost(currentIdx);
+                          },
+                        },
+                      ]);
                     } else {
                       Alert.alert("Error", result.message);
                     }
@@ -1412,40 +1031,28 @@ export default function CreateContentScreen() {
                 </TouchableOpacity>
               </View>
 
-              {/* Platform Info */}
               {quickPostPlatform && (
                 <View className="p-4 border-b border-border">
                   <View className="flex-row items-center">
                     <View
                       className="w-10 h-10 rounded-full items-center justify-center mr-3"
-                      style={{ backgroundColor: (PLATFORM_CONFIGS[quickPostPlatform]?.color || '#000') + '20' }}
+                      style={{ backgroundColor: (PLATFORM_CONFIGS[quickPostPlatform]?.color || "#000") + "20" }}
                     >
-                      <IconSymbol
-                        name={PLATFORM_CONFIGS[quickPostPlatform]?.icon as any}
-                        size={20}
-                        color={PLATFORM_CONFIGS[quickPostPlatform]?.color || '#000'}
-                      />
+                      <IconSymbol name={PLATFORM_CONFIGS[quickPostPlatform]?.icon as any} size={20} color={PLATFORM_CONFIGS[quickPostPlatform]?.color || "#000"} />
                     </View>
                     <View className="flex-1">
-                      <Text className="text-sm font-medium text-foreground">
-                        Posting to {PLATFORM_CONFIGS[quickPostPlatform]?.name}
-                      </Text>
-                      <Text className="text-xs text-muted">
-                        {PLATFORM_CONFIGS[quickPostPlatform]?.instructions}
-                      </Text>
+                      <Text className="text-sm font-medium text-foreground">Posting to {PLATFORM_CONFIGS[quickPostPlatform]?.name}</Text>
+                      <Text className="text-xs text-muted">{PLATFORM_CONFIGS[quickPostPlatform]?.instructions}</Text>
                     </View>
                   </View>
-                  {quickPostContent.length > (PLATFORM_CONFIGS[quickPostPlatform]?.charLimit || Infinity) && (
-                    <View className="mt-2 p-2 bg-error/10 rounded-lg">
-                      <Text className="text-xs text-error">
-                        Content exceeds {PLATFORM_CONFIGS[quickPostPlatform]?.name}'s character limit. It will be truncated.
-                      </Text>
-                    </View>
+                  {selectedPlatforms.length > 1 && (
+                    <Text className="text-xs text-primary mt-2">
+                      Platform {selectedPlatforms.indexOf(quickPostPlatform as SocialPlatform) + 1} of {selectedPlatforms.length}
+                    </Text>
                   )}
                 </View>
               )}
 
-              {/* Editable Content */}
               <ScrollView className="px-4 pt-4 pb-8">
                 <Text className="text-sm font-medium text-foreground mb-2">Edit content before posting:</Text>
                 <TextInput
@@ -1454,12 +1061,8 @@ export default function CreateContentScreen() {
                   onChangeText={setQuickPostContent}
                   multiline
                   style={{ minHeight: 200, textAlignVertical: "top", color: colors.foreground }}
-                  placeholder="Your content..."
                   placeholderTextColor={colors.muted}
                 />
-                <Text className="text-xs text-muted mt-2">
-                  {quickPostContent.length} characters
-                </Text>
               </ScrollView>
             </View>
           </View>
@@ -1472,5 +1075,6 @@ export default function CreateContentScreen() {
 const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
+    paddingBottom: 20,
   },
 });
