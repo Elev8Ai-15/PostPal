@@ -50,51 +50,66 @@ const PLATFORM_FORMATTING: Record<string, string> = {
 };
 
 // ─── Local content generation for guest users ────────────────────────────────
+// This generates substantive content locally when the server AI is unavailable.
+// Each platform gets unique content with different angles and approaches.
 function generateLocalContent(params: {
   platform: string;
   topic: string;
   brandName?: string;
   brandTagline?: string;
+  brandTone?: string;
+  brandAudience?: string;
 }): { content: string; hashtags: string[] } {
-  const { platform, topic, brandName, brandTagline } = params;
-  const brandSuffix = brandName ? `\n\n— ${brandName}${brandTagline ? ` | ${brandTagline}` : ""}` : "";
+  const { platform, topic, brandName, brandTagline, brandTone, brandAudience } = params;
+  const brandLine = brandName ? `\n\n— ${brandName}${brandTagline ? ` | ${brandTagline}` : ""}` : "";
+  const topicClean = topic.trim();
+  const topicTag = topicClean.replace(/[^a-zA-Z0-9]/g, "").substring(0, 30);
+
+  // Extract key phrases from the topic for more natural content
+  const topicWords = topicClean.split(/\s+/);
+  const isQuestion = topicClean.endsWith("?");
+  const shortTopic = topicWords.length > 5 ? topicWords.slice(0, 5).join(" ") + "..." : topicClean;
 
   const generators: Record<string, () => { content: string; hashtags: string[] }> = {
     instagram: () => ({
-      content: `Let's talk about ${topic}! ✨\n\nThis is a game-changer for anyone looking to level up.\n\n✔️ Key insight: ${topic} is transforming how we think about success\n✔️ Pro tip: Start small, think big, and stay consistent\n✔️ Remember: Every expert was once a beginner\n\nDouble tap if you agree! 👍 Drop a 🔥 in the comments if you're ready to take action.${brandSuffix}`,
-      hashtags: [topic.replace(/\s+/g, ""), "ContentCreator", "GrowthMindset", "DigitalMarketing", "Success"],
+      content: `Stop scrolling — this matters 👇\n\nI spent the last week diving deep into ${topicClean}, and here are 5 things that completely changed my perspective:\n\n1️⃣ The 80/20 rule applies here too — 80% of results come from 20% of the effort. Focus on what actually moves the needle.\n\n2️⃣ Most people fail because they try to do everything at once. Pick ONE strategy and master it before adding more.\n\n3️⃣ Consistency beats intensity every single time. 30 minutes daily > 5 hours once a week.\n\n4️⃣ The people who succeed fastest? They invest in learning from others who've already done it.\n\n5️⃣ Track your progress weekly. What gets measured gets improved.\n\nWhich of these resonates most with you? Drop a number in the comments 👇\n\n💾 Save this for when you need a reminder.${brandLine}`,
+      hashtags: [topicTag, "Strategy", "GrowthMindset", "BusinessTips", "Productivity", "Success", "Motivation", "EntrepreneurLife", "PersonalDevelopment", "GoalSetting", "MindsetShift", "DailyHabits", "LevelUp", "ContentCreator", "KnowledgeIsPower"],
     }),
     twitter: () => ({
-      content: `Let's talk about ${topic}:\n\nHere's the thing most people miss 👇\n\nThe key to success isn't just knowing about ${topic} — it's taking action on it TODAY.\n\nRT if you agree 🔄${brandSuffix}`,
-      hashtags: [topic.replace(/\s+/g, "")],
+      content: `The biggest misconception about ${shortTopic}?\n\nThat you need to be an expert to start.\n\nYou don't. You just need to start before you're ready.\n\nThe gap between knowing and doing is where 90% of people get stuck.${brandLine}`,
+      hashtags: [topicTag],
     }),
     linkedin: () => ({
-      content: `I've been reflecting on how ${topic} is reshaping our industry.\n\nHere are 3 key takeaways:\n\n1. Innovation starts with understanding the fundamentals\n2. The most successful professionals embrace continuous learning\n3. Collaboration and authentic networking drive real results\n\nWhat's your experience with ${topic}? I'd love to hear your perspective in the comments.${brandSuffix}`,
-      hashtags: [topic.replace(/\s+/g, ""), "ProfessionalDevelopment", "ThoughtLeadership"],
+      content: `I've been studying ${topicClean} for the past several months, and one pattern keeps emerging.\n\nThe professionals who excel aren't necessarily the most talented. They're the most systematic.\n\nHere's the framework I've seen work repeatedly:\n\n𝗦𝘁𝗲𝗽 𝟭: Audit your current approach. Most people skip this and jump straight to tactics. That's like building a house without checking the foundation.\n\n𝗦𝘁𝗲𝗽 𝟮: Identify the 2-3 highest-leverage activities. Not everything deserves equal attention. Use the ICE framework (Impact, Confidence, Ease) to prioritize.\n\n𝗦𝘁𝗲𝗽 𝟯: Build a 90-day execution plan. Break it into 30-day sprints with clear milestones. Review and adjust monthly.\n\n𝗦𝘁𝗲𝗽 𝟰: Measure what matters. Vanity metrics feel good but don't drive decisions. Focus on leading indicators, not just lagging ones.\n\nThe companies and professionals I've seen transform their results with ${shortTopic} all share one trait: they treat it as a system, not a one-time project.\n\nWhat's your biggest challenge with ${shortTopic}? I'd love to hear your perspective 👇${brandLine}`,
+      hashtags: [topicTag, "Leadership", "ProfessionalDevelopment", "Strategy", "BusinessGrowth"],
     }),
     facebook: () => ({
-      content: `Let's talk about ${topic}! 🚀\n\nThis is something I'm really passionate about and I wanted to share my thoughts with you all.\n\n${topic} has the power to transform the way we approach our goals. Whether you're just starting out or you're a seasoned pro, there's always something new to learn.\n\nWhat do you think? Share your thoughts below! 👇\n\nLike & Share if this resonates with you! ❤️${brandSuffix}`,
-      hashtags: [topic.replace(/\s+/g, "")],
+      content: `Can we talk about ${topicClean} for a minute? 🤔\n\nI've been having conversations with so many people about this lately, and I keep hearing the same thing:\n\n"I know I should focus on this, but I don't know where to start."\n\nSound familiar? Here's what I tell everyone:\n\nStart with what you already know. Seriously. You don't need another course, another book, or another webinar. You need to take what you already know and actually DO something with it.\n\nHere are 3 simple steps to get moving TODAY:\n\n✅ Write down your #1 goal related to ${shortTopic}\n✅ Identify the smallest possible action you can take in the next 24 hours\n✅ Tell someone about it (accountability is everything)\n\nThat's it. No complicated strategy. No expensive tools. Just action.\n\nWho's in? Tag someone who needs to hear this! 👇${brandLine}`,
+      hashtags: [topicTag, "Community"],
     }),
     tiktok: () => ({
-      content: `🚨 STOP SCROLLING 🚨\n\nLet's talk about ${topic}...\n\nHere's what nobody is telling you 👇\n\nThis is the sign you've been waiting for. ${topic} is YOUR moment.\n\nFollow for more 🔥${brandSuffix}`,
-      hashtags: [topic.replace(/\s+/g, ""), "FYP", "Viral", "LearnOnTikTok"],
+      content: `[HOOK - First 2 seconds]\n"Here's what nobody tells you about ${shortTopic}..."\n\n[CONTENT]\nOkay so I've been deep in the research on this and there are 3 things that blew my mind:\n\nNumber 1 — The people who are crushing it right now? They started when they felt LEAST ready. Not when everything was perfect.\n\nNumber 2 — You don't need a massive budget or following. The data shows that micro-strategies consistently outperform big flashy campaigns.\n\nNumber 3 — And this is the big one — the best time to start was yesterday. The second best time? Right now. Literally right now.\n\n[CTA]\nFollow if you want more real talk about ${shortTopic}. No fluff, just stuff that actually works.\n\nDrop a 🔥 if this hit different.${brandLine}`,
+      hashtags: [topicTag, "FYP", "LearnOnTikTok", "RealTalk", "GameChanger"],
     }),
     youtube: () => ({
-      content: `${topic} - The Complete Guide\n\nIn this video, we dive deep into ${topic} and break down everything you need to know.\n\n⏰ Timestamps:\n0:00 - Introduction\n1:30 - Why ${topic} matters\n3:00 - Key strategies\n5:00 - Common mistakes to avoid\n7:00 - Action steps\n\n🔔 Subscribe and hit the bell for more content like this!${brandSuffix}`,
-      hashtags: [topic.replace(/\s+/g, ""), "YouTube"],
+      content: `${topicClean} — The Complete Breakdown (What Actually Works in 2026)\n\nIn this video, I'm breaking down everything you need to know about ${topicClean} — no fluff, no filler, just actionable strategies you can implement today.\n\n⏰ TIMESTAMPS:\n0:00 - Why ${shortTopic} matters more than ever\n1:45 - The #1 mistake most people make (and how to avoid it)\n3:30 - The 3-step framework that actually works\n6:00 - Real examples and case studies\n8:30 - Tools and resources I recommend\n10:00 - Your 7-day action plan\n11:30 - Q&A and final thoughts\n\n📌 KEY TAKEAWAYS:\n• Why 73% of people fail at ${shortTopic} (and the simple fix)\n• The "minimum viable" approach that gets results in 30 days\n• 3 free tools that will save you hours every week\n• The accountability framework top performers use\n\n🔗 RESOURCES MENTIONED:\n• Free worksheet: [link in description]\n• Recommended reading: [see pinned comment]\n\n🔔 Subscribe and hit the bell so you don't miss the next video!\n\n💬 Drop a comment: What's YOUR biggest challenge with ${shortTopic}?${brandLine}`,
+      hashtags: [topicTag, "HowTo", "Tutorial", "Strategy"],
     }),
     reddit: () => ({
-      content: `${topic} - Thoughts and Discussion\n\nI wanted to share some thoughts on ${topic} and get the community's perspective.\n\nHere's what I've found:\n\n- The landscape is changing rapidly\n- There are some really interesting developments happening\n- Most people are overlooking key aspects\n\nWhat's your experience? Has anyone else noticed these trends?\n\nWould love to hear different viewpoints on this.${brandSuffix}`,
+      content: `${topicClean} — What I've learned after months of research and experimentation\n\nHey everyone,\n\nI've been going deep on ${topicClean} for a while now and wanted to share some honest observations. Not trying to sell anything — just genuinely curious about others' experiences.\n\nHere's what I've found:\n\n**What actually works:**\n- Starting small and iterating. Every "overnight success" I've looked into had months or years of quiet work behind it.\n- Focusing on fundamentals over trends. The basics haven't changed much — execution is what separates people.\n- Getting feedback early and often. The biggest waste of time is perfecting something nobody wants.\n\n**What doesn't work (despite what the internet says):**\n- Trying to copy exactly what worked for someone else. Context matters enormously.\n- Spending more time planning than doing. Analysis paralysis is real.\n- Going it alone. Having even one person to bounce ideas off makes a huge difference.\n\n**What I'm still figuring out:**\n- How to balance quality with consistency\n- When to pivot vs. when to stay the course\n- How to measure progress when results are slow\n\nHas anyone else been working on ${shortTopic}? What's been your experience? I'd especially love to hear from people who've been at it for 6+ months.\n\nEdit: Thanks for all the responses! Lots of great perspectives here.`,
       hashtags: [],
     }),
     threads: () => ({
-      content: `Hot take on ${topic}:\n\nMost people are overthinking this. The key? Just start.\n\n${topic} isn't rocket science — it's about consistency and showing up every day.${brandSuffix}`,
-      hashtags: [topic.replace(/\s+/g, "")],
+      content: `Unpopular opinion about ${shortTopic}:\n\nThe people giving you advice about it probably figured it out through trial and error, not some secret formula.\n\nStop looking for shortcuts. Start experimenting. That's literally the whole secret.\n\nWhat's your take? 👇${brandLine}`,
+      hashtags: [topicTag],
     }),
     bluesky: () => ({
-      content: `Thinking about ${topic} today. The key insight most people miss: consistency beats perfection every time.${brandSuffix}`,
+      content: `Been thinking about ${shortTopic} a lot lately. The biggest insight? Most advice overcomplicates it. Start with the basics, be consistent, and iterate. That's 90% of the game.${brandLine}`,
       hashtags: [],
+    }),
+    pinterest: () => ({
+      content: `${topicClean} — Your Complete Guide\n\n📌 Save this pin for later!\n\nEverything you need to know about ${topicClean}, broken down into simple, actionable steps.\n\n✅ Start with the fundamentals\n✅ Build consistent habits\n✅ Track your progress\n✅ Adjust and improve\n\nTap the link for the full guide! 🔗${brandLine}`,
+      hashtags: [topicTag, "Tips", "Guide", "HowTo", "Inspiration"],
     }),
   };
 
@@ -202,7 +217,7 @@ export default function CreateContentScreen() {
   const [quickPostContent, setQuickPostContent] = useState("");
   const [showQuickPostEditor, setShowQuickPostEditor] = useState(false);
 
-  const generateMutation = trpc.ai.generateContent.useMutation();
+  const generateAllMutation = trpc.ai.generateAllPlatforms.useMutation();
 
   useEffect(() => {
     checkUploadPostStatus();
@@ -234,40 +249,64 @@ export default function CreateContentScreen() {
     setIsGenerating(true);
 
     try {
-      // Generate content for ALL platforms at once
-      const results: Record<string, { content: string; hashtags: string[] }> = {};
+      const brandContext = isBrandConfigured ? getBrandContext() : undefined;
+      const platformIds = PLATFORMS.map((p) => p.id);
+      let results: Record<string, { content: string; hashtags: string[] }> = {};
 
-      for (const platform of PLATFORMS) {
-        const brandContext = isBrandConfigured ? getBrandContext() : undefined;
+      if (isAuthenticated) {
+        try {
+          // Use single API call to generate ALL platforms at once (much faster)
+          const aiResult = await generateAllMutation.mutateAsync({
+            topic: topic.trim(),
+            brandContext,
+            platforms: platformIds,
+          });
 
-        if (isAuthenticated) {
-          try {
-            const result = await generateMutation.mutateAsync({
-              contentType: "social",
-              platform: platform.id as any,
-              topic: topic.trim(),
-              tone: "professional",
-              brandContext,
-            });
-            results[platform.id] = {
-              content: result.content,
-              hashtags: result.hashtags || [],
-            };
-          } catch {
-            // Fallback to local generation if server fails
+          // Parse the AI response into our format
+          const platforms = aiResult?.platforms || aiResult;
+          for (const platform of PLATFORMS) {
+            const platformData = platforms?.[platform.id];
+            if (platformData?.content) {
+              results[platform.id] = {
+                content: platformData.content,
+                hashtags: platformData.hashtags || [],
+              };
+            } else {
+              // Fallback for any platform the AI missed
+              results[platform.id] = generateLocalContent({
+                platform: platform.id,
+                topic: topic.trim(),
+                brandName: isBrandConfigured ? brand.brandName : undefined,
+                brandTagline: isBrandConfigured ? brand.tagline : undefined,
+                brandTone: isBrandConfigured ? brand.toneOfVoice : undefined,
+                brandAudience: isBrandConfigured ? brand.targetAudience : undefined,
+              });
+            }
+          }
+        } catch (serverError) {
+          console.log("Server AI unavailable, using local generation");
+          // Fallback to local generation for all platforms
+          for (const platform of PLATFORMS) {
             results[platform.id] = generateLocalContent({
               platform: platform.id,
               topic: topic.trim(),
               brandName: isBrandConfigured ? brand.brandName : undefined,
               brandTagline: isBrandConfigured ? brand.tagline : undefined,
+              brandTone: isBrandConfigured ? brand.toneOfVoice : undefined,
+              brandAudience: isBrandConfigured ? brand.targetAudience : undefined,
             });
           }
-        } else {
+        }
+      } else {
+        // Not authenticated — use local generation
+        for (const platform of PLATFORMS) {
           results[platform.id] = generateLocalContent({
             platform: platform.id,
             topic: topic.trim(),
             brandName: isBrandConfigured ? brand.brandName : undefined,
             brandTagline: isBrandConfigured ? brand.tagline : undefined,
+            brandTone: isBrandConfigured ? brand.toneOfVoice : undefined,
+            brandAudience: isBrandConfigured ? brand.targetAudience : undefined,
           });
         }
       }

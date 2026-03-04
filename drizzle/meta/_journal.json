@@ -57,6 +57,13 @@
       "when": 1770059490276,
       "tag": "0007_strong_riptide",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1772602252342,
+      "tag": "0008_loving_typhoid_mary",
+      "breakpoints": true
     }
   ]
 }

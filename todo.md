@@ -341,3 +341,15 @@
 - [x] Updated Dashboard with prominent Create New Post CTA and clear flow description
 - [x] Every button leads somewhere real - no dead ends
 - [x] 316 tests passing, 0 TypeScript errors
+
+## Bug Fix (v2.12) - AI Content Generation Not Producing Real Content
+- [x] Audit server-side AI generation endpoint and prompts
+- [x] Audit client-side local generation fallback
+- [x] Rebuilt server AI prompts - elite content strategist with platform-specific instructions
+- [x] Added new generateAllPlatforms endpoint - generates all 9 platforms in ONE API call
+- [x] Rebuilt local fallback - each platform gets unique, substantive content (not template fill-ins)
+- [x] Each platform has genuinely different content angles and approaches
+- [x] Content includes hooks, CTAs, hashtags, and platform-appropriate formatting
+- [x] Added threads and bluesky to database schema, ran migration
+- [x] Brand context (tone, audience, name) passed to both server and local generation
+- [x] 316 tests passing, 0 TypeScript errors

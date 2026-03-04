@@ -80,7 +80,7 @@ export const appRouter = router({
         title: z.string().min(1).max(255),
         content: z.string().min(1),
         contentType: z.enum(["social", "blog", "newsletter", "video"]),
-        platform: z.enum(["instagram", "twitter", "linkedin", "facebook", "youtube", "tiktok", "reddit", "email", "blog"]).optional(),
+        platform: z.enum(["instagram", "twitter", "linkedin", "facebook", "youtube", "tiktok", "reddit", "threads", "bluesky", "email", "blog"]).optional(),
         scheduledAt: z.date().optional(),
         imageUrl: z.string().optional(),
         aiGenerated: z.boolean().optional(),
@@ -192,7 +192,7 @@ export const appRouter = router({
         title: z.string().min(1).max(255),
         content: z.string().min(1),
         contentType: z.enum(["social", "blog", "newsletter", "video"]),
-        platform: z.enum(["instagram", "twitter", "linkedin", "facebook", "youtube", "tiktok", "reddit", "email", "blog"]).optional(),
+        platform: z.enum(["instagram", "twitter", "linkedin", "facebook", "youtube", "tiktok", "reddit", "threads", "bluesky", "email", "blog"]).optional(),
         recurrenceType: z.enum(["daily", "weekly", "biweekly", "monthly"]),
         recurrenceDays: z.string().optional(), // "1,3,5" for Mon, Wed, Fri
         recurrenceTime: z.string().optional(), // "09:00"
@@ -753,57 +753,54 @@ Keep the reply concise but helpful. Return JSON: { "reply": "your suggested repl
 
   // AI Content Generation
   ai: router({
+    // Generate content for a single platform
     generateContent: protectedProcedure
       .input(z.object({
         contentType: z.enum(["social", "blog", "newsletter", "video"]),
-        platform: z.enum(["instagram", "twitter", "linkedin", "facebook", "youtube", "tiktok", "reddit", "email", "blog"]).optional(),
+        platform: z.enum(["instagram", "twitter", "linkedin", "facebook", "youtube", "tiktok", "reddit", "threads", "bluesky", "email", "blog"]).optional(),
         topic: z.string().min(1),
         tone: z.enum(["professional", "casual", "friendly", "authoritative", "humorous"]).optional(),
         keywords: z.array(z.string()).optional(),
         brandContext: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
-        const platformInstructions: Record<string, string> = {
-          instagram: "Create engaging Instagram content with relevant hashtags. Keep it visual and concise.",
-          twitter: "Create a Twitter/X post or thread. Keep tweets under 280 characters. Use relevant hashtags.",
-          linkedin: "Create professional LinkedIn content. Focus on industry insights and professional value.",
-          facebook: "Create engaging Facebook content that encourages interaction and sharing.",
-          youtube: "Create a video script with intro, main content, and call-to-action.",
-          tiktok: "Create TikTok video script content. Focus on hooks, trending sounds, and Gen-Z friendly language. Keep it short, punchy, and video-first. Use 3-5 trending hashtags.",
-          reddit: "Create authentic Reddit content. Be genuine and community-focused. Avoid promotional language. Do not use hashtags - Reddit doesn't use them.",
-          email: "Create an email newsletter with a compelling subject line and engaging body content.",
-          blog: "Create a well-structured blog post with introduction, main points, and conclusion.",
-        };
+        const platformName = input.platform || "general";
 
-        const toneInstructions = {
-          professional: "Use a professional and polished tone.",
-          casual: "Use a casual and relaxed tone.",
-          friendly: "Use a warm and friendly tone.",
-          authoritative: "Use an authoritative and expert tone.",
-          humorous: "Use a light-hearted and humorous tone where appropriate.",
-        };
+        const systemPrompt = `You are an elite social media content strategist and copywriter with deep expertise in digital marketing. Your job is to create REAL, SUBSTANTIVE, READY-TO-POST content that provides genuine value to the audience.
 
-        const systemPrompt = `You are an expert marketing content creator. Generate high-quality ${input.contentType} content.
-${input.platform ? platformInstructions[input.platform] : ""}
-${input.tone ? toneInstructions[input.tone] : "Use a professional tone."}
-${input.keywords?.length ? `Include these keywords naturally: ${input.keywords.join(", ")}` : ""}
-${input.brandContext ? `
-IMPORTANT BRAND CONTEXT - Personalize the content to match this brand:
-${input.brandContext}
-Make sure the content reflects the brand's identity, tone, and speaks to their target audience. Reference the brand naturally where appropriate.` : ""}
+CRITICAL RULES:
+1. DO NOT just rephrase or rewrite the topic. You must CREATE original, valuable content.
+2. Include REAL insights, actionable tips, specific strategies, or thought-provoking perspectives.
+3. Write as if you are a subject matter expert who has researched this topic thoroughly.
+4. Include specific numbers, frameworks, or data points where relevant (use realistic estimates if exact data isn't available).
+5. Every piece of content must provide VALUE — teach something, inspire action, or share a unique perspective.
+6. Match the exact tone and format that performs best on ${platformName}.
 
-Return your response as JSON with the following structure:
+PLATFORM-SPECIFIC REQUIREMENTS:
+${input.platform === "instagram" ? "- Write a compelling caption with line breaks for readability\n- Start with a strong hook (first line must stop the scroll)\n- Include 2-3 actionable takeaways or tips\n- End with a clear call-to-action (save, share, comment)\n- Use strategic emoji placement (not excessive)\n- Suggest 15-20 relevant hashtags mixing popular and niche" : ""}
+${input.platform === "twitter" ? "- MUST be under 280 characters for the main tweet\n- Start with a bold, attention-grabbing statement\n- Be punchy, direct, and quotable\n- If the topic needs more depth, structure as a thread (Tweet 1, Tweet 2, etc.)\n- Include 1-2 relevant hashtags max\n- End with engagement driver (question, hot take, or CTA)" : ""}
+${input.platform === "linkedin" ? "- Write a professional thought-leadership post\n- Start with a hook line that creates curiosity\n- Share a personal insight, industry trend, or contrarian take\n- Include specific data, examples, or case studies\n- Use short paragraphs (1-2 sentences each) for readability\n- End with a question to drive comments\n- Include 3-5 professional hashtags" : ""}
+${input.platform === "facebook" ? "- Write conversational, community-focused content\n- Start with a relatable statement or question\n- Tell a mini-story or share a personal experience angle\n- Include specific tips or takeaways\n- Encourage sharing and tagging friends\n- Keep it warm and approachable" : ""}
+${input.platform === "youtube" ? "- Write an SEO-optimized video description\n- Include a compelling title suggestion\n- Write a detailed description with timestamps\n- Include key talking points and takeaways\n- Add relevant tags and keywords\n- Include subscribe CTA" : ""}
+${input.platform === "tiktok" ? "- Write a video script with a strong hook in the first 2 seconds\n- Keep it under 60 seconds of speaking time\n- Use casual, Gen-Z friendly language\n- Include trending format suggestions (e.g., 'Things nobody tells you about...')\n- Add 3-5 trending and relevant hashtags\n- Include a CTA (follow, comment, stitch)" : ""}
+${input.platform === "reddit" ? "- Write authentic, community-first content\n- NO promotional language or marketing speak\n- Provide genuine value, detailed analysis, or personal experience\n- Be conversational and honest\n- Include discussion questions\n- NO hashtags (Reddit doesn't use them)\n- Suggest relevant subreddits" : ""}
+${input.platform === "threads" ? "- Keep it concise (under 500 chars)\n- Conversational and casual tone\n- Share a quick insight or hot take\n- Drive replies with a question" : ""}
+${!input.platform ? "- Create versatile content optimized for social media engagement" : ""}
+
+${input.brandContext ? `BRAND CONTEXT — Personalize content for this brand:\n${input.brandContext}\nReflect the brand's identity and speak to their target audience naturally.` : ""}
+
+Return your response as JSON:
 {
-  "title": "A catchy title for the content",
-  "content": "The main content body",
-  "hashtags": ["relevant", "hashtags"],
-  "callToAction": "A compelling call to action"
+  "title": "A compelling, specific title (not generic)",
+  "content": "The full, ready-to-post content body",
+  "hashtags": ["relevant", "specific", "hashtags"],
+  "callToAction": "A specific call to action"
 }`;
 
         const response = await invokeLLM({
           messages: [
             { role: "system", content: systemPrompt },
-            { role: "user", content: `Create ${input.contentType} content about: ${input.topic}` },
+            { role: "user", content: `Create expert-level ${platformName} content about: ${input.topic}\n\nRemember: Do NOT just rephrase the topic. Research it, provide real insights, specific tips, data points, and create content that would genuinely perform well on ${platformName}. The content should be so good that a professional social media manager would be proud to post it.` },
           ],
           response_format: { type: "json_object" },
         });
@@ -811,6 +808,70 @@ Return your response as JSON with the following structure:
         const messageContent = response.choices[0].message.content;
         const content = JSON.parse(typeof messageContent === 'string' ? messageContent : "{}");
         return content;
+      }),
+
+    // Generate content for ALL platforms in one call (faster)
+    generateAllPlatforms: protectedProcedure
+      .input(z.object({
+        topic: z.string().min(1),
+        brandContext: z.string().optional(),
+        platforms: z.array(z.string()).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const targetPlatforms = input.platforms || ["instagram", "twitter", "linkedin", "facebook", "tiktok", "youtube", "reddit", "threads", "bluesky"];
+
+        const systemPrompt = `You are an elite social media content strategist and copywriter. You create REAL, SUBSTANTIVE, READY-TO-POST content that provides genuine value.
+
+Your task: Given a topic, create UNIQUE, platform-optimized content for each of these platforms: ${targetPlatforms.join(", ")}.
+
+CRITICAL RULES:
+1. DO NOT just rephrase the topic differently for each platform. Each platform version must have UNIQUE content, angles, and approaches.
+2. Include REAL insights — specific tips, strategies, data points, frameworks, or expert perspectives.
+3. Write as a subject matter expert who has deeply researched this topic.
+4. Each platform's content must match that platform's native style, format, and best practices.
+5. Content must be READY TO POST — no placeholders, no "[insert here]" markers.
+
+PLATFORM STYLE GUIDE:
+- instagram: Visual caption with hook line, 2-3 actionable tips, emojis, 15-20 hashtags, CTA to save/share
+- twitter: Under 280 chars, bold statement, punchy and quotable, 1-2 hashtags
+- linkedin: Professional thought-leadership, data/examples, short paragraphs, question at end, 3-5 hashtags
+- facebook: Conversational, relatable story angle, community-focused, encourage sharing
+- tiktok: Video script with 2-second hook, casual Gen-Z language, under 60s, trending hashtags
+- youtube: SEO title + detailed description with timestamps, tags, subscribe CTA
+- reddit: Authentic discussion post, no marketing speak, genuine value, NO hashtags, suggest subreddits
+- threads: Short hot take under 500 chars, conversational, drive replies
+- bluesky: Concise insight under 300 chars, community-oriented
+
+${input.brandContext ? `BRAND CONTEXT:\n${input.brandContext}\nPersonalize all content to reflect this brand naturally.` : ""}
+
+Return JSON with this EXACT structure:
+{
+  "platforms": {
+    "instagram": { "content": "full post text", "hashtags": ["tag1", "tag2"] },
+    "twitter": { "content": "full tweet text", "hashtags": ["tag1"] },
+    "linkedin": { "content": "full post text", "hashtags": ["tag1", "tag2"] },
+    "facebook": { "content": "full post text", "hashtags": [] },
+    "tiktok": { "content": "video script text", "hashtags": ["tag1", "tag2"] },
+    "youtube": { "content": "title + description", "hashtags": ["tag1"] },
+    "reddit": { "content": "discussion post text", "hashtags": [] },
+    "threads": { "content": "short post text", "hashtags": [] },
+    "bluesky": { "content": "short post text", "hashtags": [] }
+  }
+}
+
+Only include platforms that were requested. Each platform MUST have unique content — not the same text reformatted.`;
+
+        const response = await invokeLLM({
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: `Create expert-level social media content about: ${input.topic}\n\nGenerate unique, substantive, ready-to-post content for each platform. Each version should take a different angle or approach to the topic. Include real insights, specific tips, data points, and actionable advice. The content should be so good that a professional social media manager would post it immediately.` },
+          ],
+          response_format: { type: "json_object" },
+        });
+
+        const messageContent = response.choices[0].message.content;
+        const parsed = JSON.parse(typeof messageContent === 'string' ? messageContent : "{}");
+        return parsed;
       }),
 
     improveContent: protectedProcedure
