@@ -366,3 +366,12 @@
 - [x] Gemini API primary, built-in generator fallback, images uploaded to S3
 - [x] Pushed code to GitHub (Elev8Ai-15/PostPal)
 - [x] 318 tests passing, 0 TypeScript errors
+
+## Bug Fix (v2.13.1) - Gemini API Integration Verification
+- [ ] Pull Claude Code branch changes (claude/test-feature-verification-52dNe)
+- [ ] Audit Gemini API integration in server/routers.ts
+- [ ] Verify GEMINI_API_KEY is properly wired to server endpoint
+- [ ] Fix any missing Gemini API code
+- [ ] Ensure image generation works end-to-end
+- [ ] Update failing tests to handle missing API key gracefully
+- [ ] Push fixes to GitHub

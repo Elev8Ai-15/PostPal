@@ -101,7 +101,7 @@ export async function getUserByOpenId(openId: string) {
 
 // TODO: add feature queries here as your schema grows.
 
-import { desc, and, gte, lte } from "drizzle-orm";
+import { desc, and, gte, lte, sql } from "drizzle-orm";
 import {
   posts,
   socialAccounts,
@@ -396,11 +396,13 @@ export async function getInboxMessages(userId: number, filters?: {
   
   const conditions = [eq(inboxMessages.userId, userId)];
   
-  if (filters?.platform && filters.platform !== "all") {
-    conditions.push(eq(inboxMessages.platform, filters.platform as any));
+  const validPlatforms = ["instagram", "twitter", "linkedin", "facebook", "youtube"] as const;
+  const validMessageTypes = ["dm", "comment", "mention", "reply"] as const;
+  if (filters?.platform && filters.platform !== "all" && (validPlatforms as readonly string[]).includes(filters.platform)) {
+    conditions.push(eq(inboxMessages.platform, filters.platform as typeof validPlatforms[number]));
   }
-  if (filters?.messageType && filters.messageType !== "all") {
-    conditions.push(eq(inboxMessages.messageType, filters.messageType as any));
+  if (filters?.messageType && filters.messageType !== "all" && (validMessageTypes as readonly string[]).includes(filters.messageType)) {
+    conditions.push(eq(inboxMessages.messageType, filters.messageType as typeof validMessageTypes[number]));
   }
   if (filters?.isRead !== undefined) {
     conditions.push(eq(inboxMessages.isRead, filters.isRead));
@@ -508,7 +510,7 @@ export async function incrementSavedReplyUseCount(id: number, userId: number) {
   const reply = await getSavedReplyById(id, userId);
   if (reply) {
     await db.update(savedReplies).set({ useCount: reply.useCount + 1 })
-      .where(eq(savedReplies.id, id));
+      .where(and(eq(savedReplies.id, id), eq(savedReplies.userId, userId)));
   }
 }
 
@@ -556,13 +558,13 @@ export async function deleteAutoResponder(id: number, userId: number) {
   await db.delete(autoResponders).where(and(eq(autoResponders.id, id), eq(autoResponders.userId, userId)));
 }
 
-export async function incrementAutoResponderUseCount(id: number) {
+export async function incrementAutoResponderUseCount(id: number, userId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const responder = await db.select().from(autoResponders).where(eq(autoResponders.id, id));
-  if (responder[0]) {
-    await db.update(autoResponders).set({ useCount: responder[0].useCount + 1 })
-      .where(eq(autoResponders.id, id));
+  const responder = await getAutoResponderById(id, userId);
+  if (responder) {
+    await db.update(autoResponders).set({ useCount: responder.useCount + 1 })
+      .where(and(eq(autoResponders.id, id), eq(autoResponders.userId, userId)));
   }
 }
 
@@ -849,17 +851,17 @@ export async function upsertUserSubscription(userId: number, data: Omit<InsertUs
 }
 
 export async function incrementPostCount(userId: number) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  
+  const dbConn = await getDb();
+  if (!dbConn) throw new Error("Database not available");
+
   const subscription = await getUserSubscription(userId);
   if (!subscription) return;
-  
+
   // Check if we need to reset the week counter
   const now = new Date();
   const weekStart = subscription.weekStartDate;
   const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  
+
   if (!weekStart || weekStart < oneWeekAgo) {
     // Reset counter for new week
     await updateUserSubscription(userId, {
@@ -867,10 +869,10 @@ export async function incrementPostCount(userId: number) {
       weekStartDate: now,
     });
   } else {
-    // Increment counter
-    await updateUserSubscription(userId, {
-      postsThisWeek: subscription.postsThisWeek + 1,
-    });
+    // Atomic increment using SQL to avoid race conditions
+    await dbConn.update(userSubscriptions)
+      .set({ postsThisWeek: sql`${userSubscriptions.postsThisWeek} + 1` })
+      .where(eq(userSubscriptions.userId, userId));
   }
 }
 

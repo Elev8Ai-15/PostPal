@@ -73,7 +73,7 @@ export function useSubscription() {
   const tier: SubscriptionTier = isOwner ? "vibe" : ((plan?.name as SubscriptionTier) || "free");
   
   const OWNER_LIMITS: SubscriptionLimits = {
-    maxPlatforms: 7,
+    maxPlatforms: 9,
     maxPostsPerWeek: -1,
     maxTeamMembers: 10,
     analyticsRetentionDays: -1,
