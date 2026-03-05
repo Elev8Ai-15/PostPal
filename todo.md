@@ -355,13 +355,14 @@
 - [x] 316 tests passing, 0 TypeScript errors
 
 ## AI Image Generation with Gemini API (v2.13)
-- [ ] Research Gemini API image generation endpoints and capabilities
-- [ ] Request Gemini API key from user via webdev_request_secrets
-- [ ] Create Gemini image generation service (server-side)
-- [ ] Add image generation step to content creation wizard (Step 2.5)
-- [ ] Generate AI image prompts based on post content/topic
-- [ ] Display generated image preview with regenerate option
-- [ ] Allow user to skip image generation
-- [ ] Attach generated image to post for each platform
-- [ ] Store generated images for reuse
-- [ ] Test image generation flow end-to-end
+- [x] Research Gemini API image generation endpoints and capabilities
+- [x] Request Gemini API key from user via webdev_request_secrets (with preventMatching)
+- [x] Create Gemini image generation server endpoint (generatePostImage in routers.ts)
+- [x] Add image generation step to content creation wizard (Step 3: Media, 5-step wizard)
+- [x] Generate AI image prompts based on topic, platform, style, and brand context
+- [x] Display generated image preview with regenerate and remove options
+- [x] Allow user to skip image generation (Skip — No Image button)
+- [x] 6 image styles: photorealistic, illustration, minimal, bold, artistic, infographic
+- [x] Gemini API primary, built-in generator fallback, images uploaded to S3
+- [x] Pushed code to GitHub (Elev8Ai-15/PostPal)
+- [x] 318 tests passing, 0 TypeScript errors

@@ -849,7 +849,7 @@ export default function CreateContentScreen() {
           {/* ═══════════════════════════════════════════════════════════════════
               STEP 4: SCHEDULE
               ═══════════════════════════════════════════════════════════════════ */}
-          {step === 3 && (
+          {step === 4 && (
             <View className="px-5 pt-4">
               <Text className="text-lg font-semibold text-foreground mb-1">When do you want to post?</Text>
               <Text className="text-sm text-muted mb-4">Choose to post immediately or schedule for later.</Text>
@@ -998,7 +998,7 @@ export default function CreateContentScreen() {
                 className="bg-primary rounded-2xl py-4 mt-2 items-center flex-row justify-center"
                 onPress={() => {
                   triggerHaptic();
-                  setStep(4);
+                  setStep(5);
                   scrollToTop();
                 }}
                 activeOpacity={0.8}
@@ -1010,9 +1010,9 @@ export default function CreateContentScreen() {
           )}
 
           {/* ═══════════════════════════════════════════════════════════════════
-              STEP 4: SELECT PLATFORMS & POST
+              STEP 5: SELECT PLATFORMS & POST
               ═══════════════════════════════════════════════════════════════════ */}
-          {step === 4 && (
+          {step === 5 && (
             <View className="px-5 pt-4">
               <Text className="text-lg font-semibold text-foreground mb-1">Where do you want to post?</Text>
               <Text className="text-sm text-muted mb-4">Select the platforms to publish your content.</Text>
