@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { COOKIE_NAME } from "../shared/const.js";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
@@ -509,7 +510,10 @@ export const appRouter = router({
     // Campaign posts management
     getPosts: protectedProcedure
       .input(z.object({ campaignId: z.number() }))
-      .query(({ input }) => {
+      .query(async ({ ctx, input }) => {
+        // Verify campaign ownership before returning posts
+        const campaign = await db.getCampaignById(input.campaignId, ctx.user.id);
+        if (!campaign) throw new TRPCError({ code: "NOT_FOUND", message: "Campaign not found" });
         return db.getCampaignPosts(input.campaignId);
       }),
 
@@ -519,7 +523,10 @@ export const appRouter = router({
         postId: z.number(),
         platform: z.enum(["instagram", "twitter", "linkedin", "facebook", "youtube", "tiktok", "reddit"]),
       }))
-      .mutation(({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        // Verify campaign ownership before adding post
+        const campaign = await db.getCampaignById(input.campaignId, ctx.user.id);
+        if (!campaign) throw new TRPCError({ code: "NOT_FOUND", message: "Campaign not found" });
         return db.addPostToCampaign({
           campaignId: input.campaignId,
           postId: input.postId,
@@ -528,14 +535,18 @@ export const appRouter = router({
       }),
 
     removePost: protectedProcedure
-      .input(z.object({ campaignPostId: z.number() }))
-      .mutation(({ input }) => {
+      .input(z.object({ campaignPostId: z.number(), campaignId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        // Verify campaign ownership before removing post
+        const campaign = await db.getCampaignById(input.campaignId, ctx.user.id);
+        if (!campaign) throw new TRPCError({ code: "NOT_FOUND", message: "Campaign not found" });
         return db.removePostFromCampaign(input.campaignPostId);
       }),
 
     updatePostMetrics: protectedProcedure
       .input(z.object({
         id: z.number(),
+        campaignId: z.number(),
         impressions: z.number().optional(),
         engagement: z.number().optional(),
         clicks: z.number().optional(),
@@ -544,15 +555,21 @@ export const appRouter = router({
         shares: z.number().optional(),
         performanceScore: z.number().min(0).max(100).optional(),
       }))
-      .mutation(({ input }) => {
-        const { id, ...data } = input;
+      .mutation(async ({ ctx, input }) => {
+        // Verify campaign ownership before updating metrics
+        const campaign = await db.getCampaignById(input.campaignId, ctx.user.id);
+        if (!campaign) throw new TRPCError({ code: "NOT_FOUND", message: "Campaign not found" });
+        const { id, campaignId, ...data } = input;
         return db.updateCampaignPostMetrics(id, data);
       }),
 
     // Campaign analytics
     getAnalytics: protectedProcedure
       .input(z.object({ campaignId: z.number() }))
-      .query(({ input }) => {
+      .query(async ({ ctx, input }) => {
+        // Verify campaign ownership before returning analytics
+        const campaign = await db.getCampaignById(input.campaignId, ctx.user.id);
+        if (!campaign) throw new TRPCError({ code: "NOT_FOUND", message: "Campaign not found" });
         return db.getCampaignAnalytics(input.campaignId);
       }),
 
@@ -1051,7 +1068,7 @@ Return your response as JSON:
       }),
 
     // Generate image for social media post using Gemini API (primary) or built-in generator (fallback)
-    generatePostImage: publicProcedure
+    generatePostImage: protectedProcedure
       .input(z.object({
         topic: z.string().min(1),
         platform: z.string().optional(),

@@ -93,6 +93,9 @@ export function useAuth(options?: UseAuthOptions) {
           } else {
             fetchUser();
           }
+        }).catch((err) => {
+          console.error("[useAuth] Failed to get cached user:", err);
+          fetchUser();
         });
       }
     } else {

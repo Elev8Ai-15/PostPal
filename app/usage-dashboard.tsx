@@ -307,13 +307,13 @@ export default function UsageDashboardScreen() {
             <View style={styles.billingDate}>
               <Text style={[styles.billingDateLabel, { color: colors.muted }]}>Week Started</Text>
               <Text style={[styles.billingDateValue, { color: colors.foreground }]}>
-                {new Date(Date.now() - (new Date().getDay() * 24 * 60 * 60 * 1000)).toLocaleDateString()}
+                {new Date(Date.now() - (((new Date().getDay() + 6) % 7) * 24 * 60 * 60 * 1000)).toLocaleDateString()}
               </Text>
             </View>
             <View style={styles.billingDate}>
               <Text style={[styles.billingDateLabel, { color: colors.muted }]}>Resets On</Text>
               <Text style={[styles.billingDateValue, { color: colors.foreground }]}>
-                {new Date(Date.now() + ((7 - new Date().getDay()) * 24 * 60 * 60 * 1000)).toLocaleDateString()}
+                {new Date(Date.now() + (((8 - new Date().getDay()) % 7 || 7) * 24 * 60 * 60 * 1000)).toLocaleDateString()}
               </Text>
             </View>
           </View>

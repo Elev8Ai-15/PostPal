@@ -8,7 +8,7 @@ if (!stripeSecretKey) {
 }
 
 export const stripe = stripeSecretKey
-  ? new Stripe(stripeSecretKey, { apiVersion: "2026-01-28.clover" })
+  ? new Stripe(stripeSecretKey)
   : null;
 
 // Subscription tier definitions
@@ -561,15 +561,16 @@ async function handlePaymentFailed(invoice: Stripe.Invoice & { subscription?: st
   if (subscriptionResult.length > 0) {
     const userSub = subscriptionResult[0];
     
-    // Record failed payment
+    // Record failed payment (use amount_paid=0 for failed, amount_due for context)
     await dbInstance.insert(paymentHistory).values({
       userId: userSub.userId,
       subscriptionId: userSub.id,
       stripeInvoiceId: invoice.id,
       stripePaymentIntentId: invoice.payment_intent as string || null,
-      amount: invoice.amount_due,
+      amount: invoice.amount_paid ?? 0,
       currency: invoice.currency,
       status: "failed",
+      description: `Failed payment of $${(invoice.amount_due / 100).toFixed(2)}`,
     });
     
     // Update subscription status to past_due

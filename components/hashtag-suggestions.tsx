@@ -34,6 +34,7 @@ function generateLocalHashtags(topic: string, platform?: Platform): {
     facebook: ["Community", "ShareThis", "ViralContent", "MustSee", "Trending", "LifeHacks"],
     youtube: ["Subscribe", "YouTuber", "Tutorial", "HowTo", "MustWatch", "Trending"],
     tiktok: ["FYP", "ForYouPage", "Viral", "TikTokTrending", "LearnOnTikTok", "LifeHack"],
+    reddit: ["AMA", "TIL", "Discussion", "OC", "Advice", "HowTo"],
   };
 
   const platformNiche: Record<string, string[]> = {
@@ -43,6 +44,7 @@ function generateLocalHashtags(topic: string, platform?: Platform): {
     facebook: ["SmallBusinessOwner", "Entrepreneurship", "BusinessGrowth", "MarketingTips", "SuccessStory"],
     youtube: ["ContentCreation", "VideoMarketing", "BrandBuilding", "OnlineBusiness", "DigitalStrategy"],
     tiktok: ["SmallBusinessTok", "EntrepreneurLife", "BusinessTips", "MarketingHacks", "SideHustle"],
+    reddit: ["SubredditCommunity", "RedditMarketing", "NicheAudience", "AuthenticContent", "CommunityBuilding"],
   };
 
   const trending = platformTrending[platform || "instagram"] || platformTrending.instagram;
@@ -56,7 +58,7 @@ function generateLocalHashtags(topic: string, platform?: Platform): {
   ].filter(h => h.length > 2);
 
   const platformLimits: Record<string, number> = {
-    instagram: 30, twitter: 5, linkedin: 5, facebook: 10, youtube: 15, tiktok: 8,
+    instagram: 30, twitter: 5, linkedin: 5, facebook: 10, youtube: 15, tiktok: 5, reddit: 5,
   };
 
   const limit = platformLimits[platform || "instagram"] || 10;
@@ -112,6 +114,9 @@ export function HashtagSuggestions({
     },
   });
 
+  const isSelected = (hashtag: string) => selectedHashtags.includes(hashtag);
+  const hasContent = searchContent.trim().length > 0;
+
   const handleLocalGenerate = () => {
     const localSuggestions = generateLocalHashtags(searchContent, platform);
     setSuggestions(localSuggestions);
@@ -122,7 +127,7 @@ export function HashtagSuggestions({
   const handleGenerateSuggestions = () => {
     if (!hasContent) return;
     setIsLoading(true);
-    
+
     if (isAuthenticated) {
       suggestMutation.mutate({
         content: searchContent,
@@ -136,9 +141,6 @@ export function HashtagSuggestions({
       }, 500); // Small delay for UX feel
     }
   };
-
-  const isSelected = (hashtag: string) => selectedHashtags.includes(hashtag);
-  const hasContent = searchContent.trim().length > 0;
 
   const HashtagChip = ({ tag, category }: { tag: string; category?: "trending" | "niche" }) => {
     const selected = isSelected(tag);

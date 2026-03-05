@@ -272,9 +272,13 @@ export const csrf = {
     if (typeof crypto !== "undefined" && crypto.getRandomValues) {
       crypto.getRandomValues(array);
     } else {
-      // Fallback for environments without crypto
-      for (let i = 0; i < array.length; i++) {
-        array[i] = Math.floor(Math.random() * 256);
+      // Fallback using Node.js crypto module
+      try {
+        const nodeCrypto = require("crypto");
+        const bytes = nodeCrypto.randomBytes(32);
+        array.set(bytes);
+      } catch {
+        throw new Error("No cryptographically secure random number generator available");
       }
     }
     return Array.from(array, (byte) => byte.toString(16).padStart(2, "0")).join("");

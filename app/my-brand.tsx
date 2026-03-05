@@ -1,5 +1,5 @@
 import { ScrollView, Text, View, TouchableOpacity, TextInput, StyleSheet, Alert, Platform, Modal, FlatList } from "react-native";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
@@ -88,9 +88,9 @@ export default function MyBrandScreen() {
   const [hasChanges, setHasChanges] = useState(false);
 
   // Sync local state when brand loads
-  useState(() => {
+  useEffect(() => {
     setLocalBrand(brand);
-  });
+  }, [brand]);
 
   // Update local state and track changes
   const handleFieldChange = useCallback((field: keyof typeof brand, value: any) => {
