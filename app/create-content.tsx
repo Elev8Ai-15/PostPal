@@ -1,4 +1,4 @@
-import { ScrollView, Text, View, TouchableOpacity, TextInput, StyleSheet, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, Modal } from "react-native";
+import { ScrollView, Text, View, TouchableOpacity, TextInput, StyleSheet, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, Modal, Image, Dimensions } from "react-native";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
@@ -120,7 +120,7 @@ function generateLocalContent(params: {
 // ─── Step indicator component ────────────────────────────────────────────────
 function StepIndicator({ currentStep, totalSteps }: { currentStep: number; totalSteps: number }) {
   const colors = useColors();
-  const stepLabels = ["Topic", "Content", "Schedule", "Post"];
+  const stepLabels = ["Topic", "Content", "Media", "Schedule", "Post"];
 
   return (
     <View className="flex-row items-center justify-center px-5 py-3">
@@ -186,7 +186,7 @@ export default function CreateContentScreen() {
   const scrollViewRef = useRef<ScrollView>(null);
 
   // Wizard state
-  const [step, setStep] = useState(1); // 1=Topic, 2=Content, 3=Schedule, 4=Post
+  const [step, setStep] = useState(1); // 1=Topic, 2=Content, 3=Media, 4=Schedule, 5=Post
 
   // Step 1: Topic
   const [topic, setTopic] = useState("");
@@ -217,7 +217,14 @@ export default function CreateContentScreen() {
   const [quickPostContent, setQuickPostContent] = useState("");
   const [showQuickPostEditor, setShowQuickPostEditor] = useState(false);
 
+  // Image generation state
+  const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [imageStyle, setImageStyle] = useState<"photorealistic" | "illustration" | "minimal" | "bold" | "artistic" | "infographic">("photorealistic");
+  const [showImageSection, setShowImageSection] = useState(false);
+
   const generateAllMutation = trpc.ai.generateAllPlatforms.useMutation();
+  const generateImageMutation = trpc.ai.generatePostImage.useMutation();
 
   useEffect(() => {
     checkUploadPostStatus();
@@ -538,7 +545,7 @@ export default function CreateContentScreen() {
         </View>
 
         {/* Step Indicator */}
-        <StepIndicator currentStep={step} totalSteps={4} />
+        <StepIndicator currentStep={step} totalSteps={5} />
 
         <ScrollView
           ref={scrollViewRef}
@@ -681,14 +688,166 @@ export default function CreateContentScreen() {
                 }}
                 activeOpacity={0.8}
               >
-                <Text className="text-lg font-semibold text-background">Next: Set Schedule</Text>
+                <Text className="text-lg font-semibold text-background">Next: Add Media</Text>
                 <IconSymbol name="chevron.right" size={20} color={colors.background} style={{ marginLeft: 8 }} />
               </TouchableOpacity>
             </View>
           )}
 
           {/* ═══════════════════════════════════════════════════════════════════
-              STEP 3: SCHEDULE
+              STEP 3: MEDIA (AI Image Generation)
+              ═══════════════════════════════════════════════════════════════════ */}
+          {step === 3 && (
+            <View className="px-5 pt-4">
+              <Text className="text-lg font-semibold text-foreground mb-1">Add Media to Your Post</Text>
+              <Text className="text-sm text-muted mb-4">Generate an AI image to make your post stand out, or skip this step.</Text>
+
+              {/* Image Style Selector */}
+              <Text className="text-sm font-medium text-foreground mb-3">Choose a style:</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-5">
+                <View className="flex-row gap-2">
+                  {([
+                    { id: "photorealistic" as const, label: "Photo", icon: "camera.fill" },
+                    { id: "illustration" as const, label: "Illustration", icon: "paintbrush" },
+                    { id: "minimal" as const, label: "Minimal", icon: "minus" },
+                    { id: "bold" as const, label: "Bold", icon: "bolt.fill" },
+                    { id: "artistic" as const, label: "Artistic", icon: "sparkles" },
+                    { id: "infographic" as const, label: "Infographic", icon: "chart.bar" },
+                  ]).map((s) => {
+                    const isSelected = imageStyle === s.id;
+                    return (
+                      <TouchableOpacity
+                        key={s.id}
+                        onPress={() => {
+                          triggerHaptic();
+                          setImageStyle(s.id);
+                        }}
+                        activeOpacity={0.7}
+                        style={{
+                          paddingHorizontal: 16,
+                          paddingVertical: 10,
+                          borderRadius: 12,
+                          backgroundColor: isSelected ? colors.primary : colors.surface,
+                          borderWidth: 1,
+                          borderColor: isSelected ? colors.primary : colors.border,
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 6,
+                        }}
+                      >
+                        <IconSymbol name={s.icon as any} size={16} color={isSelected ? colors.background : colors.foreground} />
+                        <Text style={{ color: isSelected ? colors.background : colors.foreground, fontWeight: "600", fontSize: 13 }}>
+                          {s.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </ScrollView>
+
+              {/* Generate Image Button */}
+              <TouchableOpacity
+                className="rounded-2xl py-4 items-center flex-row justify-center mb-4"
+                style={{
+                  backgroundColor: isGeneratingImage ? colors.surface : colors.primary,
+                  borderWidth: isGeneratingImage ? 1 : 0,
+                  borderColor: colors.border,
+                }}
+                onPress={async () => {
+                  triggerHaptic();
+                  setIsGeneratingImage(true);
+                  try {
+                    const result = await generateImageMutation.mutateAsync({
+                      topic: topic.trim(),
+                      platform: "instagram",
+                      style: imageStyle,
+                      brandColors: isBrandConfigured && brand.brandColors?.length ? brand.brandColors : undefined,
+                      brandName: isBrandConfigured ? brand.brandName : undefined,
+                    });
+                    if (result?.url) {
+                      setGeneratedImageUrl(result.url);
+                      if (Platform.OS !== "web") {
+                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                      }
+                    } else {
+                      Alert.alert("Error", "No image was generated. Please try again.");
+                    }
+                  } catch (error: any) {
+                    console.error("Image generation error:", error);
+                    Alert.alert("Error", error.message || "Failed to generate image. Please try again.");
+                  } finally {
+                    setIsGeneratingImage(false);
+                  }
+                }}
+                activeOpacity={0.8}
+                disabled={isGeneratingImage}
+              >
+                {isGeneratingImage ? (
+                  <>
+                    <ActivityIndicator color={colors.primary} />
+                    <Text className="text-base font-semibold ml-2" style={{ color: colors.primary }}>Generating Image...</Text>
+                  </>
+                ) : (
+                  <>
+                    <IconSymbol name="wand.and.stars" size={22} color={colors.background} />
+                    <Text className="text-base font-semibold text-background ml-2">
+                      {generatedImageUrl ? "Regenerate Image" : "Generate AI Image"}
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              {/* Generated Image Preview */}
+              {generatedImageUrl && (
+                <View className="bg-surface rounded-2xl border border-border overflow-hidden mb-4">
+                  <Image
+                    source={{ uri: generatedImageUrl }}
+                    style={{
+                      width: Dimensions.get("window").width - 40,
+                      height: (Dimensions.get("window").width - 40) * 0.75,
+                      borderTopLeftRadius: 16,
+                      borderTopRightRadius: 16,
+                    }}
+                    resizeMode="cover"
+                  />
+                  <View className="p-3 flex-row items-center justify-between">
+                    <View className="flex-row items-center">
+                      <IconSymbol name="checkmark.circle.fill" size={18} color={colors.success} />
+                      <Text className="text-sm font-medium text-foreground ml-2">Image ready</Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => {
+                        triggerHaptic();
+                        setGeneratedImageUrl(null);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text className="text-sm text-error font-medium">Remove</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+
+              {/* Next / Skip Buttons */}
+              <TouchableOpacity
+                className="bg-primary rounded-2xl py-4 items-center flex-row justify-center"
+                onPress={() => {
+                  triggerHaptic();
+                  setStep(4);
+                  scrollToTop();
+                }}
+                activeOpacity={0.8}
+              >
+                <Text className="text-lg font-semibold text-background">
+                  {generatedImageUrl ? "Next: Set Schedule" : "Skip — No Image"}
+                </Text>
+                <IconSymbol name="chevron.right" size={20} color={colors.background} style={{ marginLeft: 8 }} />
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* ═══════════════════════════════════════════════════════════════════
+              STEP 4: SCHEDULE
               ═══════════════════════════════════════════════════════════════════ */}
           {step === 3 && (
             <View className="px-5 pt-4">

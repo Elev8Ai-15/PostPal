@@ -4,6 +4,8 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { invokeLLM } from "./_core/llm";
+import { generateImage } from "./_core/imageGeneration";
+import { storagePut } from "./storage";
 import { notifyOwner } from "./_core/notification";
 import * as db from "./db";
 import * as socialIntegration from "./social-integration";
@@ -1046,6 +1048,101 @@ Return your response as JSON:
             youtube: "First 100 characters of description are most important for SEO.",
           }[input.platform],
         };
+      }),
+
+    // Generate image for social media post using Gemini API (primary) or built-in generator (fallback)
+    generatePostImage: publicProcedure
+      .input(z.object({
+        topic: z.string().min(1),
+        platform: z.string().optional(),
+        style: z.enum(["photorealistic", "illustration", "minimal", "bold", "artistic", "infographic"]).optional(),
+        brandColors: z.array(z.string()).optional(),
+        brandName: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        // Build a detailed image prompt based on the topic and platform
+        const styleGuide: Record<string, string> = {
+          photorealistic: "photorealistic, high-quality photography style, natural lighting, professional composition",
+          illustration: "modern digital illustration, clean lines, vibrant colors, flat design",
+          minimal: "minimalist design, clean whitespace, simple shapes, elegant typography",
+          bold: "bold graphic design, strong contrast, eye-catching colors, impactful visual",
+          artistic: "artistic and creative, painterly style, unique textures, expressive composition",
+          infographic: "clean infographic style, data visualization, organized layout, professional",
+        };
+
+        const platformGuide: Record<string, string> = {
+          instagram: "square format (1:1), visually stunning, Instagram-worthy, scroll-stopping",
+          twitter: "landscape format (16:9), clean and shareable, works as a tweet image",
+          linkedin: "professional and polished, landscape format, corporate-appropriate",
+          facebook: "engaging and shareable, landscape format, community-friendly",
+          tiktok: "vertical format (9:16), trendy and eye-catching, Gen-Z aesthetic",
+          youtube: "landscape thumbnail format (16:9), high contrast, readable text overlay",
+        };
+
+        const style = styleGuide[input.style || "photorealistic"];
+        const platformHint = input.platform ? platformGuide[input.platform] || "" : "";
+        const brandHint = input.brandName ? `Subtly incorporate the brand identity of "${input.brandName}".` : "";
+        const colorHint = input.brandColors?.length ? `Use these brand colors as accents: ${input.brandColors.join(", ")}.` : "";
+
+        const imagePrompt = `Create a professional social media image about: ${input.topic}. Style: ${style}. ${platformHint} ${brandHint} ${colorHint} The image should be visually compelling, professional, and ready to post on social media. No text overlays unless specifically relevant. High quality, well-composed.`;
+
+        // Try Gemini API first (nano banana / imagen)
+        const geminiKey = process.env.GEMINI_API_KEY;
+        if (geminiKey) {
+          try {
+            const geminiResponse = await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${geminiKey}`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  contents: [{
+                    parts: [{ text: imagePrompt }],
+                  }],
+                  generationConfig: {
+                    responseModalities: ["TEXT", "IMAGE"],
+                  },
+                }),
+              }
+            );
+
+            if (geminiResponse.ok) {
+              const geminiData = await geminiResponse.json();
+              const candidates = geminiData?.candidates || [];
+              for (const candidate of candidates) {
+                const parts = candidate?.content?.parts || [];
+                for (const part of parts) {
+                  if (part.inlineData?.mimeType?.startsWith("image/")) {
+                    // Upload the base64 image to S3
+                    const buffer = Buffer.from(part.inlineData.data, "base64");
+                    const ext = part.inlineData.mimeType === "image/png" ? "png" : "jpg";
+                    const randomSuffix = Math.random().toString(36).substring(2, 10);
+                    const { url } = await storagePut(
+                      `post-images/gemini-${Date.now()}-${randomSuffix}.${ext}`,
+                      buffer,
+                      part.inlineData.mimeType
+                    );
+                    return { url, source: "gemini" };
+                  }
+                }
+              }
+              // Gemini returned but no image in response, fall through to built-in
+              console.log("Gemini returned no image, falling back to built-in generator");
+            } else {
+              console.log(`Gemini API error: ${geminiResponse.status}, falling back to built-in generator`);
+            }
+          } catch (geminiError) {
+            console.log("Gemini API failed, falling back to built-in generator:", geminiError);
+          }
+        }
+
+        // Fallback to built-in image generator
+        try {
+          const result = await generateImage({ prompt: imagePrompt });
+          return { url: result.url, source: "built-in" };
+        } catch (builtInError) {
+          throw new Error("Image generation failed. Please try again.");
+        }
       }),
 
     generateStrategy: protectedProcedure

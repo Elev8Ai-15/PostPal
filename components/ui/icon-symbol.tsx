@@ -96,6 +96,12 @@ const MAPPING: Record<string, MaterialIconName> = {
   "antenna.radiowaves.left.and.right": "cell-tower",
   "arrow.up.circle.fill": "publish",
   "checkmark.seal.fill": "verified",
+  // Image generation icons
+  "wand.and.stars": "auto-fix-high",
+  "photo.fill": "photo",
+  "arrow.triangle.2.circlepath": "sync",
+  "square.and.arrow.down": "download",
+  "camera.fill": "photo-camera",
 };
 
 type IconSymbolName = keyof typeof MAPPING;

@@ -353,3 +353,15 @@
 - [x] Added threads and bluesky to database schema, ran migration
 - [x] Brand context (tone, audience, name) passed to both server and local generation
 - [x] 316 tests passing, 0 TypeScript errors
+
+## AI Image Generation with Gemini API (v2.13)
+- [ ] Research Gemini API image generation endpoints and capabilities
+- [ ] Request Gemini API key from user via webdev_request_secrets
+- [ ] Create Gemini image generation service (server-side)
+- [ ] Add image generation step to content creation wizard (Step 2.5)
+- [ ] Generate AI image prompts based on post content/topic
+- [ ] Display generated image preview with regenerate option
+- [ ] Allow user to skip image generation
+- [ ] Attach generated image to post for each platform
+- [ ] Store generated images for reuse
+- [ ] Test image generation flow end-to-end
