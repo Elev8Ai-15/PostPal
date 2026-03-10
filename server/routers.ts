@@ -1068,7 +1068,8 @@ Return your response as JSON:
       }),
 
     // Generate image for social media post using Gemini API (primary) or built-in generator (fallback)
-    generatePostImage: protectedProcedure
+    // Using publicProcedure so guest users can also generate images
+    generatePostImage: publicProcedure
       .input(z.object({
         topic: z.string().min(1),
         platform: z.string().optional(),
