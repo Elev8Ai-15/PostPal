@@ -41,7 +41,7 @@ export function getApiBaseUrl(): string {
 
     // Local development: Metro runs on 8081, API server runs on 3000
     if (hostname === "localhost" || hostname === "127.0.0.1") {
-      return `${protocol}//${hostname}:3000`;
+      return `${protocol}//${hostname}:4000`;
     }
 
     // Genspark sandbox: 8081-sandboxid.region.domain -> 3000-sandboxid.region.domain

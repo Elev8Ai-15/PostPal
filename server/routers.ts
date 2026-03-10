@@ -773,7 +773,7 @@ Keep the reply concise but helpful. Return JSON: { "reply": "your suggested repl
   // AI Content Generation
   ai: router({
     // Generate content for a single platform
-    generateContent: protectedProcedure
+    generateContent: publicProcedure
       .input(z.object({
         contentType: z.enum(["social", "blog", "newsletter", "video"]),
         platform: z.enum(["instagram", "twitter", "linkedin", "facebook", "youtube", "tiktok", "reddit", "threads", "bluesky", "email", "blog"]).optional(),
@@ -857,7 +857,7 @@ Return your response as JSON:
       }),
 
     // Generate content for ALL platforms in one call (faster)
-    generateAllPlatforms: protectedProcedure
+    generateAllPlatforms: publicProcedure
       .input(z.object({
         topic: z.string().min(1),
         brandContext: z.string().optional(),
@@ -947,7 +947,7 @@ Only include platforms that were requested. Each platform MUST have unique conte
         return parsed;
       }),
 
-    improveContent: protectedProcedure
+    improveContent: publicProcedure
       .input(z.object({
         content: z.string().min(1),
         instruction: z.string().min(1),
@@ -1217,7 +1217,7 @@ Return your response as JSON:
         }
       }),
 
-    generateStrategy: protectedProcedure
+    generateStrategy: publicProcedure
       .input(z.object({
         businessType: z.string().min(1),
         targetAudience: z.string().min(1),

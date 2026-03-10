@@ -201,14 +201,27 @@ const normalizeToolChoice = (
   return toolChoice;
 };
 
-const resolveApiUrl = () =>
-  ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
-    ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions`
-    : "https://forge.manus.im/v1/chat/completions";
+const useGeminiFallback = () => !ENV.forgeApiKey && !!process.env.GEMINI_API_KEY;
+
+const getApiKey = (): string => {
+  if (ENV.forgeApiKey) return ENV.forgeApiKey;
+  if (process.env.GEMINI_API_KEY) return process.env.GEMINI_API_KEY;
+  return "";
+};
+
+const resolveApiUrl = () => {
+  if (ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0) {
+    return `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions`;
+  }
+  if (useGeminiFallback()) {
+    return "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+  }
+  return "https://forge.manus.im/v1/chat/completions";
+};
 
 const assertApiKey = () => {
-  if (!ENV.forgeApiKey) {
-    throw new Error("OPENAI_API_KEY is not configured");
+  if (!getApiKey()) {
+    throw new Error("No API key configured. Set BUILT_IN_FORGE_API_KEY or GEMINI_API_KEY in .env");
   }
 };
 
@@ -281,9 +294,11 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   }
 
   payload.max_tokens = 32768;
+  if (!useGeminiFallback()) {
   payload.thinking = {
     budget_tokens: 128,
   };
+  }
 
   const normalizedResponseFormat = normalizeResponseFormat({
     responseFormat,
@@ -300,7 +315,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      authorization: `Bearer ${ENV.forgeApiKey}`,
+      authorization: `Bearer ${getApiKey()}`,
     },
     body: JSON.stringify(payload),
   });
