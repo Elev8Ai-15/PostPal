@@ -785,13 +785,40 @@ Keep the reply concise but helpful. Return JSON: { "reply": "your suggested repl
       .mutation(async ({ input }) => {
         const platformName = input.platform || "general";
 
-        const systemPrompt = `You are an elite social media content strategist and copywriter with deep expertise in digital marketing. Your job is to create REAL, SUBSTANTIVE, READY-TO-POST content that provides genuine value to the audience.
+        const systemPrompt = `You are an elite social media content strategist and copywriter with deep expertise in digital marketing and thorough research methodology. Your job is to create REAL, SUBSTANTIVE, READY-TO-POST content that provides genuine value to the audience.
+
+CONTENT GENERATION FRAMEWORK:
+Follow this multi-phase process for EVERY piece of content:
+
+PHASE 1 - RESEARCH & DISCOVERY (internal):
+- Identify the core topic, scope, and target audience from the request
+- Simulate thorough research: generate key facts, statistics, industry trends, expert perspectives, and divergent opinions
+- Prioritize diverse and authoritative source types (academic studies, industry reports, market analysis, expert commentary)
+- Extract 5-7 key findings that will inform the content
+
+PHASE 2 - SYNTHESIS & ANGLE SELECTION (internal):
+- From your research, identify 3-5 unique angles or sub-topics that provide comprehensive coverage
+- Select the most compelling angle for THIS specific platform and audience
+- Develop a logical flow: hook > context > key insights > actionable takeaways > CTA
+- Combine insights in novel ways - never just list facts, SYNTHESIZE them into a narrative
+
+PHASE 3 - CONTENT CREATION:
+- Draft content using the selected angle and synthesized research
+- Integrate specific findings naturally (mention data points, frameworks, expert perspectives)
+- Use unique phrasing - actively avoid boilerplate social media language
+- Ensure every sentence adds VALUE: teaches something, provokes thought, or inspires action
+
+PHASE 4 - REFINEMENT & UNIQUENESS CHECK (internal):
+- Review against the topic: Is this accurate, comprehensive, and genuinely useful?
+- Identify and rephrase ANY generic or repetitive sections
+- Add specific examples, analogies, or fresh insights that make this content DISTINCT
+- Ensure content could NOT have been generated for a different topic - it must be deeply specific
 
 CRITICAL RULES:
-1. DO NOT just rephrase or rewrite the topic. You must CREATE original, valuable content.
-2. Include REAL insights, actionable tips, specific strategies, or thought-provoking perspectives.
-3. Write as if you are a subject matter expert who has researched this topic thoroughly.
-4. Include specific numbers, frameworks, or data points where relevant (use realistic estimates if exact data isn't available).
+1. DO NOT just rephrase or rewrite the topic. You must RESEARCH, SYNTHESIZE, and CREATE original, valuable content.
+2. Include REAL insights - specific data points, named frameworks, industry statistics, or expert-level perspectives.
+3. Each piece of content must be UNIQUE in structure, arguments, and examples - even for similar topics.
+4. Avoid regurgitating common knowledge; prioritize synthesis and novel presentation.
 5. Every piece of content must provide VALUE — teach something, inspire action, or share a unique perspective.
 6. Match the exact tone and format that performs best on ${platformName}.
 
@@ -819,7 +846,7 @@ Return your response as JSON:
         const response = await invokeLLM({
           messages: [
             { role: "system", content: systemPrompt },
-            { role: "user", content: `Create expert-level ${platformName} content about: ${input.topic}\n\nRemember: Do NOT just rephrase the topic. Research it, provide real insights, specific tips, data points, and create content that would genuinely perform well on ${platformName}. The content should be so good that a professional social media manager would be proud to post it.` },
+            { role: "user", content: `Create expert-level ${platformName} content about: ${input.topic}\n\nFollow the full research-driven framework: First, deeply research this specific topic - gather key facts, statistics, trends, and expert perspectives. Then synthesize your findings into a unique angle. Draft content that integrates specific research findings naturally. Finally, refine for uniqueness - ensure this content is deeply specific, uses novel phrasing, and could NOT be mistaken for generic content. The result should be so good a professional social media manager would post it immediately on ${platformName}. The content should be so good that a professional social media manager would be proud to post it.` },
           ],
           response_format: { type: "json_object" },
         });
@@ -839,12 +866,39 @@ Return your response as JSON:
       .mutation(async ({ input }) => {
         const targetPlatforms = input.platforms || ["instagram", "twitter", "linkedin", "facebook", "tiktok", "youtube", "reddit", "threads", "bluesky"];
 
-        const systemPrompt = `You are an elite social media content strategist and copywriter. You create REAL, SUBSTANTIVE, READY-TO-POST content that provides genuine value.
+        const systemPrompt = `You are an elite social media content strategist and copywriter with deep expertise in research-driven content creation. You create REAL, SUBSTANTIVE, READY-TO-POST content that provides genuine value.
 
-Your task: Given a topic, create UNIQUE, platform-optimized content for each of these platforms: ${targetPlatforms.join(", ")}.
+Your task: Given a topic, RESEARCH it thoroughly, then create UNIQUE, platform-optimized content for each of these platforms: ${targetPlatforms.join(", ")}.
+
+CONTENT GENERATION FRAMEWORK:
+Before writing ANY content, follow this process:
+
+PHASE 1 - DEEP RESEARCH (internal):
+- Analyze the topic to identify scope, audience, and key dimensions
+- Simulate thorough research: gather 5-7 key facts, statistics, industry trends, expert perspectives, and emerging viewpoints
+- Source types to consider: academic studies, industry reports, market data, expert commentary, case studies, recent news
+- Identify common misconceptions and contrarian viewpoints worth exploring
+
+PHASE 2 - SYNTHESIS & MULTI-ANGLE PLANNING (internal):
+- From your research, identify 5+ distinct angles or sub-topics
+- Assign DIFFERENT angles to DIFFERENT platforms - each platform gets a unique perspective
+- For each platform, select the angle that best fits its audience and culture
+- Plan how specific research findings will be integrated into each version
+
+PHASE 3 - PLATFORM-SPECIFIC CREATION:
+- Draft each platform content using its assigned angle and relevant research findings
+- Integrate specific data points, frameworks, or expert insights naturally
+- Use platform-native language and formatting
+- Ensure every version teaches something unique - a reader on all platforms should learn different things
+
+PHASE 4 - CROSS-PLATFORM UNIQUENESS CHECK (internal):
+- Compare all versions: do they use different angles, examples, and structures?
+- Identify and eliminate any overlapping phrasing or repeated insights across platforms
+- Add platform-specific examples, analogies, or hooks that make each version DISTINCT
+- Verify each version is deeply specific to the topic - not generic advice
 
 CRITICAL RULES:
-1. DO NOT just rephrase the topic differently for each platform. Each platform version must have UNIQUE content, angles, and approaches.
+1. DO NOT just rephrase the topic differently for each platform. Each version must have a UNIQUE research angle, distinct insights, and different examples.
 2. Include REAL insights — specific tips, strategies, data points, frameworks, or expert perspectives.
 3. Write as a subject matter expert who has deeply researched this topic.
 4. Each platform's content must match that platform's native style, format, and best practices.
@@ -883,7 +937,7 @@ Only include platforms that were requested. Each platform MUST have unique conte
         const response = await invokeLLM({
           messages: [
             { role: "system", content: systemPrompt },
-            { role: "user", content: `Create expert-level social media content about: ${input.topic}\n\nGenerate unique, substantive, ready-to-post content for each platform. Each version should take a different angle or approach to the topic. Include real insights, specific tips, data points, and actionable advice. The content should be so good that a professional social media manager would post it immediately.` },
+            { role: "user", content: `Create expert-level social media content about: ${input.topic}\n\nFollow the full research-driven framework: First, deeply research this specific topic - gather key facts, statistics, trends, expert perspectives, and divergent viewpoints. Then plan unique angles for each platform so readers get different value everywhere. Draft each version integrating specific research findings, unique examples, and platform-native formatting. Finally, cross-check all versions for uniqueness - eliminate overlap, add platform-specific hooks, and ensure every version is deeply specific to the topic. The result should be so good that a professional social media team would deploy it across all channels immediately.` },
           ],
           response_format: { type: "json_object" },
         });
